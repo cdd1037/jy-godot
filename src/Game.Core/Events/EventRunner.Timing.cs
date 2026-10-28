@@ -19,12 +19,14 @@ public sealed partial class EventRunner
     private EventCommand? _sceneCommand;
     private int _sceneX, _sceneY, _targetX, _targetY;
     private int _pairFirstEvent, _pairFirstFrame, _pairFirstEnd, _pairSecondEvent, _pairSecondFrame;
+    private int _statuePhase, _statueCounter, _statuePlayerPicture;
     private TimeSpan _sceneWait;
 
     public void Advance(TimeSpan elapsed)
     {
         if (elapsed < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(elapsed));
-        if (IsRetired || Pending is not null || PendingBattle is not null || PendingLifecycle is not null || _program is null) return;
+        if (IsRetired || Pending is not null || PendingBattle is not null || PendingLifecycle is not null ||
+            PendingShop is not null || PendingEnding is not null || _program is null) return;
         if (_sceneOperation is not null)
         {
             try
@@ -91,6 +93,8 @@ public sealed partial class EventRunner
         _wait = null; _fadeCommand = null;
         PendingBattle = null; _battleCommand = null;
         PendingLifecycle = null;
+        PendingShop = null; PendingEnding = null; _tournament = null;
+        _shopCommand = null; _shopPhase = default; _shopPurchased = false;
         _fadeElapsed = _fadeDuration = TimeSpan.Zero;
     }
 
@@ -104,11 +108,49 @@ public sealed partial class EventRunner
     // References: OpenLegend Z_DAT/0x2ED8D.md, 0x2F171.md and 0x2F9F2.md.
     private bool NextSceneFrame()
     {
-        if (_sceneOperation == EventOperation.AnimatePair)
+        if (_sceneOperation == EventOperation.StatueAnimation)
         {
-            if (_pairFirstFrame > _pairFirstEnd) { _sceneOperation = null; _sceneCommand = null; return false; }
-            _world.SetPictureWrapped(_pairFirstEvent, _pairFirstFrame);
-            _world.SetPictureWrapped(_pairSecondEvent, _pairSecondFrame);
+            // Z_DAT/0x301D1: six player frames, then 29 synchronized statue
+            // frames. Only the player picture freezes when it reaches 7688.
+            if (_statuePhase == 0 && _statueCounter > 7674)
+            { _statuePhase = 1; _statueCounter = 0; }
+            if (_statuePhase == 1 && _statueCounter > 56)
+            { _sceneOperation = null; _sceneCommand = null; return false; }
+            if (_statuePhase == 0)
+            {
+                _statuePlayerPicture = _statueCounter;
+                _world.SetPictureWrapped(-1, _statuePlayerPicture);
+            }
+            else
+            {
+                if (_statuePlayerPicture < 7688)
+                {
+                    _statuePlayerPicture = _statueCounter + 7676;
+                    _world.SetPictureWrapped(-1, _statuePlayerPicture);
+                }
+                _world.SetPictureWrapped(2, _statueCounter + 7690);
+                _world.SetPictureWrapped(3, _statueCounter + 7748);
+                _world.SetPictureWrapped(4, _statueCounter + 7806);
+            }
+            _statueCounter += 2;
+            _sceneWait = AnimationFrameTime;
+            return true;
+        }
+        if (_sceneOperation is EventOperation.AnimatePair or EventOperation.Ending)
+        {
+            var ending = _sceneOperation == EventOperation.Ending;
+            if (_pairFirstFrame > _pairFirstEnd)
+            {
+                if (ending)
+                {
+                    _world.BeginEnding();
+                    PendingEnding = new(++_token);
+                }
+                _sceneOperation = null; _sceneCommand = null; return false;
+            }
+            // In 62, -1 means skip that event, not animate the player.
+            if (!ending || _pairFirstEvent != -1) _world.SetPictureWrapped(_pairFirstEvent, _pairFirstFrame);
+            if (!ending || _pairSecondEvent != -1) _world.SetPictureWrapped(_pairSecondEvent, _pairSecondFrame);
             _pairFirstFrame += 2; _pairSecondFrame += 2;
             _sceneWait = AnimationFrameTime;
             return true;

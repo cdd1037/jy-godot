@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using JinYong.Content.Imaging;
+using JinYong.Content.Audio;
 using JinYong.Content.Packages;
 using JinYong.Core.Maps;
 using JinYong.Core.Battles;
@@ -85,6 +86,12 @@ public sealed partial class GameLibrary
             if (!sprites.Banks.ContainsKey(scene.SpriteBank!)) throw new InvalidDataException($"Missing sprite bank for scene {scene.SceneId}.");
         var audio = ContentJson.Read<LibraryAudio>(Tracked(manifest.Audio));
         foreach (var path in audio.Effects.Values.Concat(audio.Attacks.Values).Concat(audio.Music.Values)) _ = Tracked(path);
+        if (audio.Scores is null) throw new InvalidDataException("Music score index cannot be null.");
+        foreach (var (number, path) in audio.Scores)
+        {
+            if (number is < 1 or > 24) throw new InvalidDataException("Music score indices must match GAME01..GAME24.");
+            ContentJson.Read<MidiScore>(Tracked(path)).Validate();
+        }
         var sources = ContentJson.Read<Dictionary<string, SourceResource>>(Tracked(manifest.SourceIndex));
         foreach (var (name, resource) in sources)
         {

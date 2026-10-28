@@ -55,10 +55,30 @@ public sealed class LegacyGameImporter
                 world.Scenes.Count(scene => scene.HasLegacyMetadata), progress);
             progress?.Report("聚合原始资源与全局索引…");
             var sources = LegacySourceVault.Import(files.Keys, Read, staging);
+            if (LegacyEndingImporter.RequiredFiles.Any(sources.ContainsKey))
+            {
+                foreach (var required in LegacyEndingImporter.RequiredFiles)
+                    if (!sources.ContainsKey(required)) throw new InvalidDataException($"Incomplete ending resources: missing {required}.");
+                progress?.Report("聚合结局字图与动画…");
+                LegacyEndingImporter.Import(name => File.ReadAllBytes(Path.Combine(staging, sources[name].Storage)), staging);
+            }
             var audio = new LibraryAudio
             {
                 Effects = Audio("E", ".WAV"), Attacks = Audio("ATK", ".WAV"), Music = Audio("GAME", ".XMI")
             };
+            if (audio.Music.Count > 0)
+            {
+                Directory.CreateDirectory(Path.Combine(staging, "data/music"));
+                foreach (var (number, original) in audio.Music.OrderBy(pair => pair.Key))
+                {
+                    if (number is < 1 or > 24) throw new InvalidDataException("Original music files must use GAME01.XMI..GAME24.XMI.");
+                    progress?.Report($"转换音乐时序：GAME{number:D2}.XMI");
+                    var score = LegacyXmiImporter.Read(File.ReadAllBytes(Path.Combine(staging, original)));
+                    var scorePath = $"data/music/{number:D2}.json";
+                    ContentJson.Write(Path.Combine(staging, scorePath), score);
+                    audio.Scores.Add(number, scorePath);
+                }
+            }
             Dictionary<int, string> Audio(string prefix, string suffix) => sources.Where(pair =>
                     pair.Key.StartsWith(prefix, StringComparison.Ordinal) && pair.Key.EndsWith(suffix, StringComparison.Ordinal) &&
                     int.TryParse(pair.Key.AsSpan(prefix.Length, pair.Key.Length - prefix.Length - suffix.Length), out _))

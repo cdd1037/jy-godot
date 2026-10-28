@@ -32,7 +32,7 @@ public partial class AppRoot
 
     public override void _UnhandledKeyInput(InputEvent input)
     {
-        if (_battleController.HandleKeyInput(input))
+        if (_endingController.HandleKeyInput(input) || _shopController.HandleKeyInput(input) || _battleController.HandleKeyInput(input))
         {
             GetViewport().SetInputAsHandled();
         }
@@ -56,7 +56,7 @@ public partial class AppRoot
             if ((Input.IsActionPressed(ActionName(direction)) || Input.IsActionJustPressed(ActionName(direction))) &&
                 !_heldDirections.Contains(direction)) _heldDirections.Add(direction);
         var typing = GetViewport().GuiGetFocusOwner() is LineEdit;
-        var canWalk = !_finishing && !_busy && !typing && !_folder.Visible && !SaveMenuVisible && !_battleController.ResultsOpen && _inventoryDialog?.Visible != true && _modalClosedFrame != Engine.GetProcessFrames();
+        var canWalk = !_finishing && !_busy && !typing && !_folder.Visible && !SaveMenuVisible && !_shopController.IsOpen && !_endingController.IsOpen && !_battleController.ResultsOpen && _inventoryDialog?.Visible != true && _modalClosedFrame != Engine.GetProcessFrames();
         if (canWalk)
         {
             if (_world.Session?.IsEventRunning == true)

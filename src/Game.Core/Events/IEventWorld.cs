@@ -28,4 +28,10 @@ public interface IEventWorld
     void SetPictureWrapped(int eventIndex, int picture) => SetPicture(eventIndex, unchecked((short)picture));
     void BeginBattle(int battleId, int experienceFlag) => throw new InvalidOperationException("Battle service is unavailable.");
     bool TryGetBattleOutcome(out bool victory) { victory = false; return false; }
+    void SetExitMusicOverride(int musicId) => throw new InvalidOperationException("Exit music service is unavailable.");
+    void PlayMusic(int musicId) => throw new InvalidOperationException("Music playback service is unavailable.");
+    void RestTournamentProtagonist() => throw new InvalidOperationException("Tournament recovery service is unavailable.");
+    void BeginShop() => throw new InvalidOperationException("Shop service is unavailable.");
+    void EndShop() => throw new InvalidOperationException("Shop service is unavailable.");
+    void BeginEnding() => throw new InvalidOperationException("Ending presentation service is unavailable.");
 }

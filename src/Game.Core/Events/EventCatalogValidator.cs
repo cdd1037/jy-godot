@@ -30,6 +30,16 @@ internal static class EventCatalogValidator
             switch (command.Operation)
             {
                 case EventOperation.Dialogue: Require(catalog.Dialogues.ContainsKey(args[0]), "Unknown dialogue."); break;
+                case EventOperation.Shop:
+                    foreach (var talk in new[] { 2974, 2975, 2976 })
+                        Require(catalog.Dialogues.ContainsKey(talk), "Missing shop dialogue.");
+                    break;
+                case EventOperation.TournamentTrials:
+                    RequireRole(0);
+                    for (var talk = 2854; talk <= 2892; talk++)
+                        Require(catalog.Dialogues.ContainsKey(talk), "Missing tournament dialogue.");
+                    Require(catalog.ItemNames.ContainsKey(143), "Missing tournament reward item.");
+                    break;
                 case EventOperation.RandomDialogue:
                     for (var i = 0; i < args[1]; i++) Require(catalog.Dialogues.ContainsKey(checked(args[0] + i)), "Unknown random dialogue.");
                     break;

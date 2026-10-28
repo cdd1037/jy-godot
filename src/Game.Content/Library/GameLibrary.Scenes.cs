@@ -52,7 +52,8 @@ public sealed partial class GameLibrary
             {
                 ItemNames = data.ItemNames.Concat(overlay.ItemNames).ToDictionary(pair => pair.Key, pair => pair.Value),
                 VariableNames = data.VariableNames.Concat(overlay.VariableNames).ToDictionary(pair => pair.Key, pair => pair.Value),
-                UnavailablePrograms = data.UnavailablePrograms.Concat(overlay.UnavailablePrograms).ToDictionary(pair => pair.Key, pair => pair.Value)
+                UnavailablePrograms = data.UnavailablePrograms.Concat(overlay.UnavailablePrograms).ToDictionary(pair => pair.Key, pair => pair.Value),
+                Shops = data.Shops.Concat(overlay.Shops ?? []).ToArray()
             };
             programs = programs.Concat(overlay.Programs.Select(program => new EventProgram(program.Id,
                 program.Commands.Select(command => new EventCommand(command.Id, command.Operation, command.Arguments,
@@ -61,9 +62,9 @@ public sealed partial class GameLibrary
             initial = overlay.InitialProgramId; context = overlay.InitialEventIndex;
             picture = overlay.InitialPicture; facing = overlay.InitialFacing;
         }
-        var story = data.Programs.Length == 0 && data.Party is null && overlay is null ? null :
+        var story = data.Programs.Length == 0 && data.Party is null && data.Shops.Length == 0 && overlay is null ? null :
             new StoryCatalog(id, initial, context, picture, facing, programs, dialogues, data.ItemNames, data.InitialInventory,
-                data.UnavailablePrograms, data.VariableNames, data.Party, World, data.InitialItemIds);
+                data.UnavailablePrograms, data.VariableNames, data.Party, World, data.InitialItemIds, data.Shops);
         var document = new SceneDocument
         {
             FormatVersion = 3, Id = scene.Id, LegacySceneId = id, Name = scene.Name,

@@ -27,6 +27,7 @@ public static class LegacyGameDataImporter
         var itemNames = new Dictionary<int, string>();
         for (var i = 0; i < itemBytes.Length / 190; i++)
             itemNames.Add(i, LegacyTextDecoder.DecodeName(itemBytes.Slice(i * 190 + 2, 20)));
+        var shops = LegacyShopImporter.Read(ranger, itemNames);
         var header = ranger.Entry(0);
         var inventory = new Dictionary<int, int>();
         var itemIds = new HashSet<int>();
@@ -79,7 +80,7 @@ public static class LegacyGameDataImporter
                     new EventCommand(command.Id, command.Operation, command.Arguments, command.SourceOpcode, command.Text, command.Choices)));
                 _ = new StoryCatalog(0, null, -1, null, Direction.Down, [program],
                     localDialogues.Select(dialogue => new DialogueDefinition(dialogue.Id, dialogue.Pages)), itemNames, inventory,
-                    knownReferences, party: party, initialItemIds: itemIds);
+                    knownReferences, party: party, initialItemIds: itemIds, shops: shops);
             }
             catch (Exception error) when (IsProgramError(error))
             {
@@ -98,7 +99,7 @@ public static class LegacyGameDataImporter
             Programs = programs.Values.OrderBy(program => program.Id).ToArray(),
             Dialogues = programs.Values.SelectMany(DialogueIds).Distinct().Order().Select(Dialogue).ToArray(),
             ItemNames = itemNames, InitialInventory = inventory, InitialItemIds = itemIds.Order().ToArray(),
-            Party = party, UnavailablePrograms = unavailable, PortraitNames = names
+            Party = party, Shops = shops, UnavailablePrograms = unavailable, PortraitNames = names
         };
         _ = data.ToStoryCatalog(0); // Verify final global references together, not merely individual decoding.
         return data;
@@ -111,6 +112,14 @@ public static class LegacyGameDataImporter
             if (command.Operation == EventOperation.Dialogue) yield return command.Arguments[0];
             else if (command.Operation == EventOperation.RandomDialogue)
                 for (var offset = 0; offset < command.Arguments[1]; offset++) yield return checked(command.Arguments[0] + offset);
+            // Native helpers invoke these talks internally; KDEF contains only
+            // the helper opcode, so ordinary Dialogue commands cannot discover them.
+            else if (command.Operation == EventOperation.Shop)
+            {
+                yield return 2974; yield return 2975; yield return 2976;
+            }
+            else if (command.Operation == EventOperation.TournamentTrials)
+                for (var id = 2854; id <= 2892; id++) yield return id;
         }
     }
     private static bool IsProgramError(Exception error) => error is NotSupportedException or InvalidDataException or

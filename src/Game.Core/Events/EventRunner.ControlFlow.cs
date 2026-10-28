@@ -7,6 +7,8 @@ public sealed partial class EventRunner
     private EventCommand? _battleCommand;
     public EventBattleRequest? PendingBattle { get; private set; }
     public EventLifecycleRequest? PendingLifecycle { get; private set; }
+    public EventShopRequest? PendingShop { get; private set; }
+    public EventEndingRequest? PendingEnding { get; private set; }
     public bool IsRetired { get; private set; }
 
     public bool TryStart(int programId, int eventContext, GridPosition trigger, int usedItem = -1)
@@ -47,10 +49,48 @@ public sealed partial class EventRunner
     /// <summary>The world owns the completed battle; a confirmation cannot choose its outcome.</summary>
     public bool ResumeBattle(long token)
     {
-        if (PendingBattle?.Token != token || _battleCommand is not { } command || !_world.TryGetBattleOutcome(out var victory)) return false;
+        if (IsRetired || PendingBattle?.Token != token || !_world.TryGetBattleOutcome(out var victory)) return false;
+        if (_tournament is { Phase: TournamentPhase.AwaitBattle } trial)
+        {
+            PendingBattle = null; _battleCommand = null;
+            if (!victory)
+            {
+                _tournament = null;
+                PendingLifecycle = new(++_token, EventLifecycleKind.Death, 83);
+                return true;
+            }
+            trial.Phase = TournamentPhase.VictoryRender;
+            Pump();
+            return true;
+        }
+        if (_battleCommand is not { } command) return false;
         _cursor = _program!.IndexOf(command.Arguments[victory ? 1 : 2]);
         PendingBattle = null; _battleCommand = null;
         Pump();
+        return true;
+    }
+
+    public bool CloseShop(long token)
+    {
+        if (IsRetired || PendingShop?.Token != token) return false;
+        try
+        {
+            _world.EndShop();
+            PendingShop = null; _shopCommand = null;
+            Pump();
+            return true;
+        }
+        catch (Exception error) when (error is ArgumentException or InvalidOperationException or OverflowException or KeyNotFoundException)
+        { Fail(error, _shopCommand, _program?.Id); return false; }
+    }
+
+    /// <summary>A completed purchase attempt, including insufficient funds, proceeds to its real feedback.</summary>
+    public bool ResolveShop(long token, bool purchased)
+    {
+        if (IsRetired || PendingShop?.Token != token || _shopCommand is null) return false;
+        PendingShop = null; _shopPurchased = purchased;
+        _shopPhase = ShopPhase.FeedbackDialogue;
+        _refresh = true;
         return true;
     }
 

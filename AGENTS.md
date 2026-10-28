@@ -5,9 +5,10 @@
 - Preserve the one-way project references: Game.Importing -> Game.Content -> Game.Core. Content owns runtime documents, loading, validation and save adapters; DOS decoding, compilation and atlas writing belong to Importing. Never reference Importing from Content or Core.
 - Godot retains its import UI and therefore references Importing directly. This does not make import code part of normal library loading.
 - Keep Battle and Events as folders and partial classes inside Core, and MOD documents in Content; do not add separate Battle, Event or Mod projects without a concrete dependency boundary.
-- Organize Godot scripts under App, Battle, Views and Diagnostics. Preserve script UIDs and scene bindings when moving scripts; diagnostics must not own production rules.
+- Organize Godot scripts under App, Battle, Shops, Audio, Ending, Views and Diagnostics. Preserve script UIDs and scene bindings when moving scripts; diagnostics must not own production rules.
 - Name an independent component's file after its main type. Use partial files only for cohesive implementation of the same type; do not spread business modules across AppRoot partial files or introduce an all-purpose Context/delegate bag.
-- Battle host code belongs to independent Controller, CommandRouter, panels, model factories/formatters and AudioPlayer components. AppRoot.Composition wires them together; inventory and persistence remain existing root partials until separately refactored.
+- Battle host code belongs to independent Controller, CommandRouter, panels, model factories/formatters and AudioPlayer components. Shops, music and terminal endings likewise use independent components; AppRoot.Composition wires them together through ComposeGameplayComponents. Inventory and persistence remain existing root partials until separately refactored.
+- Keep DOS XMI and ending archive decoding offline in Game.Importing. Game.Content owns normalized scores/artwork and validation; Godot schedules/presents these assets and owns the Windows MIDI device, not game rules. WinMM GM output is not DOS FM emulation.
 - GameViewHost alone commits ScenePackage/SceneView bindings: publish only after loading succeeds, then notify SessionChanged. Production battle components must not branch on smoke flags; Diagnostics observes their read-only APIs and events.
 - Do not introduce Lua, dynamic code plugins, or a second event runtime.
 - Treat OpenLegend as a read-only reference. Keep imported original assets and generated files out of Git.

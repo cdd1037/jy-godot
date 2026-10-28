@@ -18,9 +18,11 @@
 
 目录分工见 [工程结构](docs/project-layout.md)，资源契约见 [中央资源库](docs/resource-library.md)，事件命令见 [事件编写说明](docs/event-authoring.md)。
 
-Godot 脚本按 `Scripts/App`、`Battle`、`Views`、`Diagnostics` 组织，入口仍为 `Scenes/AppRoot.tscn`，绑定 `Scripts/App/AppRoot.cs`。移动带 `.uid` 的脚本时一起保留 UID 并更新场景引用。Core 的 `BattleSession` 按出战、回合、移动、武功分部，`EventRunner` 按控制流、呈现、计时和快照分部；它们仍分别是同一个会话和执行器。
+Godot 脚本按 `Scripts/App`、`Battle`、`Shops`、`Audio`、`Ending`、`Views`、`Diagnostics` 组织，入口仍为 `Scenes/AppRoot.tscn`，绑定 `Scripts/App/AppRoot.cs`。移动带 `.uid` 的脚本时一起保留 UID 并更新场景引用。Core 的 `BattleSession` 按出战、回合、移动、武功分部，`EventRunner` 按控制流、呈现、计时、快照及商店/试炼续行分部；它们仍分别是同一个会话和执行器。
 
 Battle 目录使用独立的 `BattleController`、`BattleCommandRouter`、面板、模型构建器/格式器和 `BattleAudioPlayer`，没有 `AppRoot` 业务分部。面板只读取模型并发出意图，路由器校验上下文后委托 Core，控制器协调视图、AI 节奏与结算。`AppRoot.Composition` 负责组装并订阅模式/输入确认事件，用显式探索控件容器切换显示；根不再保存战斗 UI 状态。
+
+`ComposeGameplayComponents` 统一装配战斗、商店、音乐和结局。商店面板不判断扣款或自行选择反馈，控制器校验会话和令牌后调用 Core，保持单件确认后收店。音乐的原 XMI、结局的原归档只在 Importing 离线转换；Content 提供规范化 `MidiScore` 和结局资产/校验，Godot 只调度和绘制。Windows WinMM 使用系统 GM 音色，不能称为原 DOS FM 音色还原。结局是不可返回旧剧情的终端演出。
 
 `GameViewHost` 是 `ScenePackage` 与 `SceneView` 绑定的唯一提交入口，加载成功才发布并通知 `SessionChanged`，战斗控制器据此重置。诊断仍可使用准确命名的 `AppRoot.*Smoke` 分部，但通过控制器只读接口及 `ActionExecuted` / `ResultConfirmed` 收集结果，不让正式组件判断 `_smoke`。背包、存档等尚保留为根分部，这次没有完成整个 AppRoot 的组件化。
 
@@ -38,7 +40,7 @@ Battle 目录使用独立的 `BattleController`、`BattleCommandRouter`、面板
 
 渲染或输入变化需要 Godot 冒烟验证。集中开发期间可以合并相关画面验证，避免频繁启动窗口；提交说明应如实记录完成的检查和待统一检查的项目，不能把编译通过等同于完整游戏可玩。
 
-本轮工程拆分、类级重构与接线依用户要求未运行构建、测试或画面验收，也未重新导入原版库。既有 427 项测试及历史宿主冒烟属于整理前的版本基线，不能作为新项目引用、移动后的脚本绑定、组件生命周期或本轮功能已通过的证据。
+本轮工程整理、战斗收尾及六项事件命令、商店/音乐/结局接线依用户要求未运行构建、测试、脚本审计或画面验收，也未重新导入原版库。既有 427 项测试及历史宿主冒烟属于整理前的版本基线，不能作为新项目引用、移动后的脚本绑定、组件生命周期或本轮功能已通过的证据。源码的 68 项编号映射不等于 68 项真实运行验收；998 接受/20 拒绝仍是旧审计结果，禁止据此填造新的通过数。旧库须重新导入到新目录，才能包含新程序和规范化资产。
 
 ## 内容与生成文件
 

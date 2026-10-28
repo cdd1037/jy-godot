@@ -1,6 +1,8 @@
 using JinYong.Core.Events;
 using JinYong.Core.Maps;
 using JinYong.Core.Session;
+using JinYong.Core.Shops;
+using System.Text.Json.Serialization;
 
 namespace JinYong.Content.Packages;
 
@@ -25,10 +27,13 @@ public sealed record StoryDocument
     public PartyDefinition? Party { get; init; }
     public WorldDefinition? World { get; init; }
     public int[]? InitialItemIds { get; init; }
+    // Keep old overlays' canonical fingerprint stable when they do not add shops.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ShopDefinition[]? Shops { get; init; }
 
     public StoryCatalog ToCatalog() => new(SceneId, InitialProgramId, InitialEventIndex, InitialPicture, InitialFacing,
         Programs.Select(program => new EventProgram(program.Id, program.Commands.Select(command =>
             new EventCommand(command.Id, command.Operation, command.Arguments, command.SourceOpcode, command.Text, command.Choices)))),
         Dialogues.Select(dialogue => new DialogueDefinition(dialogue.Id, dialogue.Pages)), ItemNames, InitialInventory, UnavailablePrograms, VariableNames,
-        Party, World, InitialItemIds);
+        Party, World, InitialItemIds, Shops);
 }

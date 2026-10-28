@@ -4,6 +4,14 @@ namespace JinYong.Host;
 
 public partial class AppRoot
 {
+    private void ComposeGameplayComponents(VBoxContainer side)
+    {
+        ComposeBattleComponents(side);
+        ComposeShopComponents();
+        ComposeEndingComponents();
+        _musicController = new(_viewHost);
+    }
+
     private void ComposeBattleComponents(VBoxContainer side)
     {
         var actions = new BattleActionPanel { Name = "BattleControls" };
@@ -21,5 +29,27 @@ public partial class AppRoot
             BindStory();
         };
         AttachBattleDiagnostics(_battleController);
+    }
+
+    private void ComposeShopComponents()
+    {
+        var shop = new ShopPanel();
+        AddChild(shop);
+        _shopController = new(_viewHost, shop);
+        _shopController.InputAcknowledged += () =>
+        {
+            _heldDirections.Clear();
+            _modalClosedFrame = Engine.GetProcessFrames();
+            BindStory();
+            _world.QueueRedraw();
+        };
+    }
+
+    private void ComposeEndingComponents()
+    {
+        var panel = new EndingPanel();
+        AddChild(panel);
+        _endingController = new(_viewHost, panel);
+        _endingController.Completed += () => GetTree().Quit();
     }
 }

@@ -21,6 +21,9 @@ JinYong.Godot/
 │   └── Scripts/
 │       ├── App/            AppRoot 入口与 Composition 装配；保留启动、背包、存档等根分部
 │       ├── Battle/         独立 Controller、CommandRouter、面板、模型、格式器与 AudioPlayer
+│       ├── Shops/          单件购买 Controller、面板、只读模型与工厂
+│       ├── Audio/          规范化音乐调度与 Windows WinMM GM 输出
+│       ├── Ending/         终端结局 Controller、面板与逐帧展示模型
 │       ├── Views/          GameViewHost、SceneView 及其绘制/资源分部、DialoguePanel
 │       └── Diagnostics/    AppRoot 各项 Smoke 和 SmokeRoute
 ├── tools/Game.Tools/       导入、检查及诊断命令行工具
@@ -47,13 +50,13 @@ Godot / Game.Tools / Tests ──→ 上述所需项目
 
 `Game.Core` 不读取原版磁盘格式，也不依赖 Godot 类型。它拥有队伍、背包、世界变化、事件状态与游戏规则。
 
-`Game.Content` 负责运行时内容模型、库加载、校验、视图和存档适配。中央 `GameLibrary` 保存公共定义与资源索引，按需创建场景、世界或战场视图，公共人物、对白、程序和图片只存一份。它不引用导入项目；RGB6 调色板等库内低级格式仍由 Content 读取。
+`Game.Content` 负责运行时内容模型、库加载、校验、视图和存档适配。中央 `GameLibrary` 保存公共定义与资源索引，按需创建场景、世界或战场视图，公共人物、对白、程序和图片只存一份。`Audio/MidiScore` 和 `Ending` 定义规范化音乐/结局资产及校验，不解码 DOS 原档。它不引用导入项目；RGB6 调色板等库内低级格式仍由 Content 读取。
 
 `Game.Importing` 引用 Content，将原始 DOS 资源转换为这些公开格式。`Legacy/` 保存归档、RLE/文本解码、原版事件编译、审计和各类导入器；`Imaging/` 保存图集与 PNG 写入工具；`LibraryImportOptions` / `LibraryImportReport` 位于 `JinYong.Importing`。它可以用 `GameLibrary.Load` 回读最终输出，但 Content 不得反向调用它。
 
 Godot 读取核心状态，绘制地图、对话和动画，提交输入并推进时间。宿主保留导入按钮，因此直接引用 Importing；这次拆分不从发行程序剔除导入器，正常库加载只经过 Content。`Game.Tools` 通过 Importing 执行离线导入/审计，通过 Content 检查已导入库。工具和宿主都不能在节点或命令行分支中复制一套剧情规则。
 
-本轮只新增这一个子项目，Battle、Event、Mod 暂不独立为 csproj。`BattleSession` 仍在 Core 的 `Battles/`，按 `Roster`、`Turns`、`Movement`、`Magic` 及已有支持/AI/呈现职责分部；`EventRunner` 仍在 `Events/`，按 `ControlFlow`、`Presentation`、`Timing`、`Persistence` 分部，合同及宿主接口独立为 `EventContracts.cs` / `IEventWorld.cs`。partial 只分开源文件，不创建额外会话、状态或 VM。
+src 保持三个项目，Battle、Event、Mod 暂不独立为 csproj。`BattleSession` 仍在 Core 的 `Battles/`，按 `Roster`、`Turns`、`Movement`、`Magic` 及已有支持/AI/呈现职责分部；`EventRunner` 仍在 `Events/`，按控制流、呈现、计时、快照及商店/武林大会续行分部，合同及宿主接口独立为 `EventContracts.cs` / `IEventWorld.cs`。`Shops` 保存纯规则定义，`GameSession` 的相关内聚分部管理库存和音乐请求。partial 只分开源文件，不创建额外会话、状态或 VM。
 
 Content 中的 `GameLibrary` 按 `Loading`、`Scenes`、`Views` 分开加载校验、场景视图与世界/战场视图；主文件保留库自身的状态与入口。`Packages` 按资源清单、场景与图像、剧情文档、JSON 序列化及 `ScenePackage` 视图分组，文件移动保留原有类型命名空间和数据字段。
 
@@ -71,7 +74,11 @@ Battle 目录没有 `AppRoot` 分部，采用明确的类级职责：
 | `BattleResultsFormatter` | 纯 C# 生成结果模型和中文分节，不结算、不抽随机、不回读当前人物数值 |
 | `BattleAudioPlayer` | 独立 Node，拥有两个播放器、预载与库内缓存生命周期 |
 
-`AppRoot.Composition` 是根装配分部，创建这些组件并订阅模式/输入确认事件。探索按钮被明确的容器持有，不再按子节点顺序推断显示范围；AppRoot 不再保存战斗 UI 字段或直接处理战斗动作分支。Core 的目标查询提供合法范围、路径和影响格，SceneView 缓存绘制结果，Godot 不复制一套判定规则。
+`AppRoot.Composition` 的 `ComposeGameplayComponents` 统一装配 Battle、Shops、Ending、Audio，并订阅模式/输入确认事件；主循环只推进组件，输入按模态优先级转交。探索按钮被明确的容器持有，不再按子节点顺序推断显示范围；AppRoot 不再保存战斗 UI 字段或直接处理战斗动作分支。Core 的目标查询提供合法范围、路径和影响格，SceneView 缓存绘制结果，Godot 不复制一套判定规则。
+
+商店的 `ShopController` 绑定会话和 Core 令牌，`ShopPanel` 读取 `ShopPanelModel` 并发意图，`ShopModelFactory` 只投影名称、余额、价格和库存。交易仍由 Core 执行，一次确认买一件，反馈后收店；没有批量或出售。`MusicController` 调度 Content 的 120Hz 短消息，`WindowsMidiOutput` 只封装 WinMM 系统 GM 设备。`EndingController` 推进终端阶段，`EndingPanel` 展示已规范化图片；两者不读取原始 IDX/GRP，也不恢复旧事件栈。
+
+原版商店读取、XMI 乐谱转换与结局 ENDCOL/ENDWORD/KEND 解码分别归 Importing 的 `LegacyShopImporter`、`LegacyXmiImporter`、`LegacyEndingImporter`，正常运行不反向调用它们。
 
 行动模型只携带文本、选项、可用性和不透明的 `BattleActionToken`，不向面板暴露 `BattleSession` 或人物引用。命令路由器内部保存对应的战斗、行动者、阶段、回合和呈现标识，拒绝旧面板或旧回合发出的操作；重绑和重置会使旧标识失效。
 
@@ -87,6 +94,6 @@ Battle 目录没有 `AppRoot` 分部，采用明确的类级职责：
 
 正式入口为 `build.ps1` 构建和测试、`import.ps1` 一次导入全库、`run.ps1` 加载并运行。`-Scene` 选择预览起点，`-EventDemo` / `-StoryOverlay` 在内存应用剧情数据；没有按场景导出步骤，也不需要生成第二套基础资源。
 
-本轮源码整理、战斗结算阶段、战果页、目标预览、旧按钮保护及类级组件接线，均未重新导入资源，也未运行构建、测试或画面验收。历史 427 项测试及宿主冒烟是整理前的基线，不能证明移动后的脚本、程序集引用、组件生命周期或新增流程已经通过。
+本轮源码整理、战斗收尾及新增六项事件命令、商店/音乐/结局组件，均未重新导入资源，也未运行审计、构建、测试或画面验收。历史 427 项测试及宿主冒烟是整理前的基线，不能证明移动后的脚本、程序集引用、组件生命周期或新增流程已经通过。src 仍为三个项目；增加宿主职责目录不意味着增加程序集或脚本 VM。
 
 资源库具体布局见 [中央资源库](resource-library.md)，提交与验证约定见 [参与开发](../CONTRIBUTING.md)。

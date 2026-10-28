@@ -14,7 +14,7 @@ public partial class AppRoot
     private void ConfirmDialogue(long token)
     {
         var frame = Engine.GetProcessFrames();
-        if (_lastConfirmFrame == frame) return;
+        if (_lastConfirmFrame == frame || _modalClosedFrame == frame || _shopController.IsOpen) return;
         if (_world.Session?.Events?.Confirm(token) == true)
         {
             _lastConfirmFrame = frame;
@@ -26,7 +26,7 @@ public partial class AppRoot
     {
         if (_world.Session is not { } session) return;
         UpdateSceneInfo();
-        _controlsHint.Text = _battleController.ResultsOpen ? "Enter / 空格继续剧情" : session.Battle is not null
+        _controlsHint.Text = _shopController.IsOpen ? "↑ / ↓ 选择 · Enter 购买一件 · Esc 离开" : _battleController.ResultsOpen ? "Enter / 空格继续剧情" : session.Battle is not null
             ? "鼠标选择行动与目标 · Esc 取消 · 滚轮缩放" : "WASD 行走 · E / 空格 交互 · Enter 继续 · 滚轮缩放";
         _bagButton.Disabled = _busy || !session.CanSave || _world.IsMoving || CurrentPackage?.Story is null;
         UpdateSaveButtons();
@@ -44,7 +44,8 @@ public partial class AppRoot
             _audio.Play();
             _playedSounds.Add(soundId);
         }
-        if (_battleController.ResultsOpen) _status.Text = "查看战果后，按 Enter / 空格或点击继续剧情。";
+        if (_shopController.IsOpen) _status.Text = "选择商品，购买一件后离开；Esc 取消。";
+        else if (_battleController.ResultsOpen) _status.Text = "查看战果后，按 Enter / 空格或点击继续剧情。";
         else if (session.PendingLifecycle is not null) _status.Text = "请载入存档或退出游戏。";
         else if (session.Battle?.Presentation is { WaitingForConfirmation: true }) _status.Text = "按任意键或点击继续，关闭药效面板。";
         else if (session.Battle?.IsPresenting == true) _status.Text = "正在行动……";
@@ -54,13 +55,15 @@ public partial class AppRoot
         else if (session.IsEventRunning) _status.Text = pending?.Kind == EventPresentationKind.Choice ? "选择一项继续剧情。" : pending is null ? "……" : "空格 / Enter 继续对话";
         else if (session.InteractionMessage is { } message) _status.Text = message;
         else if (session.IsWorld) _status.Text = "方向键 / WASD 行走，走向入口进入场景。";
-        else if (session.Events?.CompletedCount > 0) _status.Text = "面向人物或箱子，按 E / 空格交互。";
+        else _status.Text = "面向人物或箱子，按 E / 空格交互。";
+        if (_endingController.IsOpen) _status.Text = "正在播放结局。";
+        if (_musicController.Error is { } musicError) _status.Text += "\n" + musicError;
     }
 
     private void RespondToChoice(long token, int option)
     {
         var frame = Engine.GetProcessFrames();
-        if (_lastConfirmFrame == frame || _world.Session?.Events is not { } events) return;
+        if (_lastConfirmFrame == frame || _modalClosedFrame == frame || _shopController.IsOpen || _world.Session?.Events is not { } events) return;
         if (option < 0 ? events.CancelChoice(token) : events.Choose(token, option))
         {
             _lastConfirmFrame = frame;

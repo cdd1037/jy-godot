@@ -38,6 +38,7 @@ public sealed partial class GameSession : IEventWorld
         BattleResources = battles;
         Travel = worldMap is not null && travelStart is not null ? new WorldTravelState(travelStart) : null;
         _position = scene.Spawn;
+        PlayEntranceMusic();
         var block = SceneMovementRules.Check(scene, _position, _position);
         if (validateSpawn && block != MovementBlock.None)
             throw new ArgumentException($"Spawn {scene.Spawn} is blocked ({block}). Specify another spawn.");
@@ -66,6 +67,8 @@ public sealed partial class GameSession : IEventWorld
         {
             if (events.PendingLifecycle is not null)
                 throw new InvalidOperationException("Testing startup cannot replace a session through a death/load request. Use -PlayOpening for this content.");
+            if (events.PendingShop is not null || events.PendingEnding is not null || events.PendingBattle is not null)
+                throw new InvalidOperationException("Testing startup cannot resolve a shop, battle or ending. Use -PlayOpening for this content.");
             if (events.Pending?.Kind == EventPresentationKind.Choice)
                 throw new InvalidOperationException("Testing startup cannot choose a story branch. Use -PlayOpening for this content.");
             if (events.Pending is { } pending) events.Confirm(pending.Token);
@@ -222,5 +225,7 @@ public sealed partial class GameSession : IEventWorld
         ValidateGameCommand(command, context);
         ValidatePresentationCommand(command);
         ValidateBattleCommand(command);
+        ValidateShopCommand(command);
+        ValidateStoryServices(command);
     }
 }

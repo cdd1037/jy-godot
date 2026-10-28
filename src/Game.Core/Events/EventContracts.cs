@@ -5,6 +5,9 @@ public sealed record EventPresentation(long Token, EventPresentationKind Kind, i
     int PortraitId, int Style, string Text, int Page, int PageCount, IReadOnlyList<EventChoice>? Choices = null, bool CanCancel = false);
 public sealed record EventTrace(int Program, int Command, EventOperation Operation);
 public sealed record EventBattleRequest(long Token, int BattleId, int ExperienceFlag);
+public sealed record EventShopRequest(long Token);
+/// <summary>Terminal handoff for the complete ending presentation; never resumes the old program.</summary>
+public sealed record EventEndingRequest(long Token);
 public enum EventLifecycleKind { Death, LoadMenu }
 /// <summary>
 /// A terminal handoff to the host's three-slot load/quit menu, not a dialogue or

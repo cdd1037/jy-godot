@@ -22,7 +22,9 @@ public sealed partial class GameSession
             HpCostScale = _battleHpCostScale, Camera = Camera, FadeOpacity = FadeOpacity,
             Party = Party?.CaptureState(), Inventory = new Dictionary<int, int>(_inventory), ItemIds = _itemIds.Order().ToArray(),
             Variables = new Dictionary<string, int>(_variables, StringComparer.Ordinal), Scenes = World.CaptureState(),
-            Events = Events?.CaptureIdleState()
+            Events = Events?.CaptureIdleState(),
+            ShopStocks = (_story?.Shops.Values ?? []).ToDictionary(shop => shop.Id, shop => Stock(shop).ToArray()),
+            CurrentMusicId = CurrentMusicId, ExitMusicOverride = _exitMusicOverride
         };
     }
 
@@ -42,6 +44,7 @@ public sealed partial class GameSession
             snapshot.PictureOverride is < short.MinValue or > short.MaxValue ||
             snapshot.LastWorldEntryDirection.HasValue && !Enum.IsDefined(snapshot.LastWorldEntryDirection.Value) ||
             snapshot.HpCostScale is < short.MinValue or > short.MaxValue ||
+            snapshot.CurrentMusicId is < 0 or > 23 || snapshot.ExitMusicOverride is < short.MinValue or > 23 ||
             !double.IsFinite(snapshot.FadeOpacity) || snapshot.FadeOpacity is < 0 or > 1 ||
             snapshot.Camera is { } camera && (!double.IsFinite(camera.X) || !double.IsFinite(camera.Y) || camera.X is < 0 or > 63 || camera.Y is < 0 or > 63))
             throw new ArgumentException("Invalid session checkpoint fields.", nameof(snapshot));
@@ -95,6 +98,9 @@ public sealed partial class GameSession
         candidate._itemIds.Clear(); candidate._itemIds.UnionWith(snapshot.ItemIds);
         candidate._variables.Clear(); foreach (var pair in snapshot.Variables) candidate._variables.Add(pair.Key, pair.Value);
         candidate.Events?.RestoreIdleState(snapshot.Events!);
+        candidate.RestoreShopStocks(snapshot.ShopStocks);
+        candidate._exitMusicOverride = snapshot.ExitMusicOverride;
+        if (snapshot.CurrentMusicId is { } music) candidate.RequestMusic(music, force: true);
         return candidate;
     }
 }

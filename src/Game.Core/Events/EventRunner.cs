@@ -22,7 +22,7 @@ public sealed partial class EventRunner
         _world = world;
         _random = randomSeed;
     }
-    public bool IsRunning => _program is not null || Pending is not null || PendingLifecycle is not null;
+    public bool IsRunning => _program is not null || Pending is not null || PendingLifecycle is not null || PendingShop is not null || PendingEnding is not null;
     public int? ProgramId => _program?.Id;
     public string? Error { get; private set; }
     public int CompletedCount => _completed.Count;
@@ -31,12 +31,23 @@ public sealed partial class EventRunner
 
     private void Pump()
     {
+        if (IsRetired || Pending is not null || PendingBattle is not null || PendingLifecycle is not null || PendingShop is not null || PendingEnding is not null) return;
         EventCommand? command = null;
         var programId = _program?.Id;
         try
         {
             for (var budget = 0; _program is not null && budget < 10000; budget++)
             {
+                if (_shopCommand is not null)
+                {
+                    command = _shopCommand;
+                    if (AdvanceShop()) return;
+                }
+                if (_tournament is not null)
+                {
+                    command = _tournament.Origin;
+                    if (AdvanceTournament()) return;
+                }
                 if (_cursor >= _program.Commands.Count) throw new InvalidOperationException("Program has no end command.");
                 command = _program.Commands[_cursor++];
                 if (++_executed > 100000) throw new InvalidOperationException("Event exceeded its total execution budget.");
@@ -50,6 +61,29 @@ public sealed partial class EventRunner
                     case EventOperation.ChangeEvent: _world.ChangeEvent(_context, _trigger, arguments); break;
                     case EventOperation.Face: _world.Face((Direction)Math.Clamp(arguments[0], 0, 3)); break;
                     case EventOperation.Sound: _sounds.Enqueue(arguments[0]); break;
+                    case EventOperation.ExitMusic: _world.SetExitMusicOverride(arguments[0]); break;
+                    case EventOperation.Music: _world.PlayMusic(arguments[0]); break;
+                    case EventOperation.Shop:
+                        _world.BeginShop();
+                        _shopCommand = command; _shopPhase = ShopPhase.Greeting;
+                        StartDialogue(2974, 111, 0);
+                        return;
+                    case EventOperation.TournamentTrials:
+                        _tournament = new TournamentState(command);
+                        if (AdvanceTournament()) return;
+                        break;
+                    case EventOperation.StatueAnimation:
+                        _sceneOperation = command.Operation; _sceneCommand = command;
+                        _statuePhase = 0; _statueCounter = 7664;
+                        if (NextSceneFrame()) return;
+                        break;
+                    case EventOperation.Ending:
+                        _world.SetPictureWrapped(-1, -86);
+                        _sceneOperation = command.Operation; _sceneCommand = command;
+                        _pairFirstEvent = arguments[0]; _pairFirstFrame = arguments[1]; _pairFirstEnd = arguments[2];
+                        _pairSecondEvent = arguments[3]; _pairSecondFrame = arguments[4];
+                        NextSceneFrame();
+                        return;
                     case EventOperation.AddItem:
                         _world.AddItem(arguments[0], arguments[1]);
                         Pending = new(++_token, EventPresentationKind.Item, -1, -1, 1,

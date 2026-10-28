@@ -42,5 +42,7 @@ public sealed record LibraryAudio
     public Dictionary<int, string> Effects { get; init; } = [];
     public Dictionary<int, string> Attacks { get; init; } = [];
     public Dictionary<int, string> Music { get; init; } = [];
+    // GAME01..GAME24 sequence numbers; Core's music IDs are zero based.
+    public Dictionary<int, string> Scores { get; init; } = [];
 }
 

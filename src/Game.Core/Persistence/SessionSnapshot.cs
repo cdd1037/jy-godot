@@ -29,6 +29,10 @@ public sealed record SessionSnapshot
     public Dictionary<string, int> Variables { get; init; } = new(StringComparer.Ordinal);
     public SceneStateSnapshot[] Scenes { get; init; } = [];
     public EventRunnerIdleSnapshot? Events { get; init; }
+    // Null is a checkpoint written before shops were implemented.
+    public Dictionary<int, int[]>? ShopStocks { get; init; }
+    public int? CurrentMusicId { get; init; }
+    public int ExitMusicOverride { get; init; } = -1;
 }
 
 public sealed record PartySnapshot(int[] Members, Dictionary<int, int[]> Roles, Dictionary<int, int> ItemUsers);

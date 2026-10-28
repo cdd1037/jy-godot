@@ -17,6 +17,7 @@ public sealed partial class GameSession
         if (IsRetired) return;
         Events?.Retire();
         Battle = null; PendingTravel = null;
+        _activeShop = null;
         _arrivalPending = false; _resolveAfterEvent = false; _fadingIn = false;
         ResetPresentationForTravel();
         IsRetired = true;

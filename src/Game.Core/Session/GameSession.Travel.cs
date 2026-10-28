@@ -124,6 +124,7 @@ public sealed partial class GameSession
             }
             else state = state with { Facing = _facing };
             Travel.Restore(state);
+            PlayExitMusic();
             IsWorld = true;
         }
         else
@@ -137,6 +138,8 @@ public sealed partial class GameSession
             Definition = definition; Scene = runtime;
             if (IsWorld) _facing = Travel!.Snapshot.Facing;
             IsWorld = false; _position = position; _arrivalPending = true;
+            _exitMusicOverride = -1;
+            PlayEntranceMusic();
         }
         _picture = null; _walkFrameOffset = 0;
         ResetPresentationForTravel();

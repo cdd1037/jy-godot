@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using JinYong.Core.Maps;
 using JinYong.Core.Session;
+using JinYong.Core.Shops;
 
 namespace JinYong.Core.Events;
 
@@ -13,7 +14,7 @@ public enum EventOperation
     BranchRole, LearnMagic, SetMagic, RoleAddItem, NoticeRole, BranchParty, BranchPartyFull,
     BranchPartyFemale, DismissParty, AddFame, IncrementEventScripts, ReplaceTiles, OpenScene,
     OpenAllScenes, BranchBooks, MoveShop, BranchItemExists, Fade, PanCamera, ScriptedWalk, AnimatePair, Battle,
-    Death, LoadMenu
+    Death, LoadMenu, ExitMusic, Music, StatueAnimation, TournamentTrials, Ending, Shop
 }
 public enum EventComparison { Equal, NotEqual, Less, LessOrEqual, Greater, GreaterOrEqual }
 public sealed record EventChoice(string Text, int Target);
@@ -31,19 +32,21 @@ public sealed class EventCommand
         {
             EventOperation.Refresh or EventOperation.End or EventOperation.Return or EventOperation.Stop or
                 EventOperation.RestParty or EventOperation.ClearPartyMp or EventOperation.DismissParty or
-                EventOperation.OpenAllScenes or EventOperation.MoveShop or EventOperation.LoadMenu => 0,
+                EventOperation.OpenAllScenes or EventOperation.MoveShop or EventOperation.LoadMenu or
+                EventOperation.StatueAnimation or EventOperation.TournamentTrials or EventOperation.Shop => 0,
             EventOperation.Dialogue or EventOperation.Animate or EventOperation.SetRoleAttribute or
                 EventOperation.AddRoleAttribute or EventOperation.LearnMagic or EventOperation.RoleAddItem or
                 EventOperation.BranchParty or EventOperation.BranchItemExists => 3,
             EventOperation.ChangeEvent => 13,
             EventOperation.Face or EventOperation.Sound or EventOperation.Jump or EventOperation.Call or EventOperation.Wait or EventOperation.Choice or
-                EventOperation.JoinParty or EventOperation.LeaveParty or EventOperation.AddFame or EventOperation.OpenScene or EventOperation.Death => 1,
+                EventOperation.JoinParty or EventOperation.LeaveParty or EventOperation.AddFame or EventOperation.OpenScene or EventOperation.Death or
+                EventOperation.ExitMusic or EventOperation.Music => 1,
             EventOperation.AddItem or EventOperation.AdjustItem or EventOperation.SetVariable or EventOperation.AddVariable or EventOperation.Teleport or
                 EventOperation.NoticeRole or EventOperation.BranchPartyFull or EventOperation.BranchPartyFemale or EventOperation.BranchBooks or EventOperation.Fade => 2,
             EventOperation.BranchUsedItem => 3,
             EventOperation.RandomDialogue or EventOperation.BranchItem or EventOperation.SetMagic or EventOperation.ReplaceTiles or
                 EventOperation.PanCamera or EventOperation.ScriptedWalk or EventOperation.Battle => 4,
-            EventOperation.BranchVariable or EventOperation.SetTile or EventOperation.IncrementEventScripts or EventOperation.AnimatePair => 5,
+            EventOperation.BranchVariable or EventOperation.SetTile or EventOperation.IncrementEventScripts or EventOperation.AnimatePair or EventOperation.Ending => 5,
             EventOperation.BranchEvent or EventOperation.BranchRole => 6,
             EventOperation.BranchAllItems => 7,
             _ => throw new ArgumentException("Unknown event operation.")
@@ -68,6 +71,9 @@ public sealed class EventCommand
             throw new ArgumentException("Battle needs a nonnegative definition ID and a signed reward flag.");
         if (operation == EventOperation.Death && _arguments[0] is < short.MinValue or > short.MaxValue)
             throw new ArgumentException("Death preserves one signed source word; the original callee ignores it.");
+        if ((operation is EventOperation.ExitMusic or EventOperation.Music) &&
+            _arguments[0] is < short.MinValue or > short.MaxValue)
+            throw new ArgumentException("Music identifiers must fit a signed source word.");
         if (operation == EventOperation.BranchVariable && !Enum.IsDefined((EventComparison)_arguments[1]))
             throw new ArgumentException("Invalid variable comparison.");
         if (operation == EventOperation.BranchItem && _arguments[1] < 0) throw new ArgumentException("Negative required item count.");
@@ -83,7 +89,7 @@ public sealed class EventCommand
                 Math.Abs((long)_arguments[2] - _arguments[0]) + Math.Abs((long)_arguments[3] - _arguments[1]) > 4096)
                 throw new ArgumentException("Scene motion needs signed 16-bit coordinates and at most 4096 steps.");
         }
-        if (operation == EventOperation.AnimatePair &&
+        if ((operation is EventOperation.AnimatePair or EventOperation.Ending) &&
             (_arguments[0] is < -1 or >= 200 || _arguments[3] is < -1 or >= 200 ||
              new[] { _arguments[1], _arguments[2], _arguments[4] }.Any(value => value is < short.MinValue or > short.MaxValue) ||
              ((long)_arguments[2] - _arguments[1]) / 2 + 1 > 4096))
@@ -105,7 +111,7 @@ public sealed class EventProgram
         if (id < 0) throw new ArgumentException("Program IDs must be nonnegative.");
         Id = id;
         Commands = Array.AsReadOnly(commands.ToArray());
-        if (Commands.Count == 0 || Commands[^1].Operation is not (EventOperation.End or EventOperation.Return or EventOperation.Stop or EventOperation.Death or EventOperation.LoadMenu))
+        if (Commands.Count == 0 || Commands[^1].Operation is not (EventOperation.End or EventOperation.Return or EventOperation.Stop or EventOperation.Death or EventOperation.LoadMenu or EventOperation.Ending))
             throw new ArgumentException($"Program {id} must end explicitly.");
         if (Commands.Select(command => command.Id).Distinct().Count() != Commands.Count)
             throw new ArgumentException($"Program {id} has duplicate command IDs.");
@@ -150,7 +156,8 @@ public sealed class StoryCatalog
         Direction initialFacing, IEnumerable<EventProgram> programs, IEnumerable<DialogueDefinition> dialogues,
         IReadOnlyDictionary<int, string> itemNames, IReadOnlyDictionary<int, int> initialInventory,
         IReadOnlyDictionary<int, string>? unavailablePrograms = null, IReadOnlyDictionary<int, string>? variableNames = null,
-        PartyDefinition? party = null, WorldDefinition? world = null, IReadOnlyCollection<int>? initialItemIds = null)
+        PartyDefinition? party = null, WorldDefinition? world = null, IReadOnlyCollection<int>? initialItemIds = null,
+        IEnumerable<ShopDefinition>? shops = null)
     {
         SceneId = sceneId;
         InitialProgramId = initialProgramId;
@@ -164,6 +171,13 @@ public sealed class StoryCatalog
         Programs = new ReadOnlyDictionary<int, EventProgram>(programs.ToDictionary(program => program.Id));
         Dialogues = new ReadOnlyDictionary<int, DialogueDefinition>(dialogues.ToDictionary(dialogue => dialogue.Id));
         ItemNames = new ReadOnlyDictionary<int, string>(new Dictionary<int, string>(itemNames));
+        var shopDefinitions = (shops ?? []).ToArray();
+        if (shopDefinitions.Select(shop => shop.Id).Distinct().Count() != shopDefinitions.Length ||
+            shopDefinitions.Select(shop => shop.SceneId).Distinct().Count() != shopDefinitions.Length)
+            throw new ArgumentException("Shops require unique IDs and scene IDs.");
+        if (shopDefinitions.SelectMany(shop => shop.Offers).Any(offer => !ItemNames.ContainsKey(offer.ItemId)))
+            throw new ArgumentException("Shop offers reference an unknown item.");
+        Shops = new ReadOnlyDictionary<int, ShopDefinition>(shopDefinitions.ToDictionary(shop => shop.Id));
         InitialInventory = new ReadOnlyDictionary<int, int>(new Dictionary<int, int>(initialInventory));
         UnavailablePrograms = new ReadOnlyDictionary<int, string>(new Dictionary<int, string>(unavailablePrograms ?? new Dictionary<int, string>()));
         VariableNames = new ReadOnlyDictionary<int, string>(new Dictionary<int, string>(variableNames ?? new Dictionary<int, string>()));
@@ -185,6 +199,7 @@ public sealed class StoryCatalog
     public IReadOnlyDictionary<int, EventProgram> Programs { get; }
     public IReadOnlyDictionary<int, DialogueDefinition> Dialogues { get; }
     public IReadOnlyDictionary<int, string> ItemNames { get; }
+    public IReadOnlyDictionary<int, ShopDefinition> Shops { get; }
     public IReadOnlyDictionary<int, int> InitialInventory { get; }
     public IReadOnlyDictionary<int, string> UnavailablePrograms { get; }
     public IReadOnlyDictionary<int, string> VariableNames { get; }

@@ -4,8 +4,9 @@ namespace JinYong.Core.Events;
 
 public sealed partial class EventRunner
 {
-    public bool CanCaptureIdleState => !IsRetired && !IsRunning && PendingBattle is null &&
-        !_animating && !_refresh && !_fading && _wait is null && _sceneOperation is null && _calls.Count == 0;
+    public bool CanCaptureIdleState => !IsRetired && !IsRunning && PendingBattle is null && PendingShop is null && PendingEnding is null &&
+        !_animating && !_refresh && !_fading && _wait is null && _sceneOperation is null &&
+        _tournament is null && _shopCommand is null && _calls.Count == 0;
 
     public EventRunnerIdleSnapshot CaptureIdleState()
     {

@@ -2,6 +2,7 @@ using JinYong.Content.Packages;
 using JinYong.Core.Events;
 using JinYong.Core.Maps;
 using JinYong.Core.Session;
+using JinYong.Core.Shops;
 
 namespace JinYong.Content.Library;
 
@@ -15,6 +16,7 @@ public sealed record GameDataDocument
     public Dictionary<int, int> InitialInventory { get; init; } = [];
     public int[] InitialItemIds { get; init; } = [];
     public PartyDefinition? Party { get; init; }
+    public ShopDefinition[] Shops { get; init; } = [];
     public WorldTravelSnapshot? TravelStart { get; init; }
     public Dictionary<int, string> UnavailablePrograms { get; init; } = [];
     public Dictionary<int, string> VariableNames { get; init; } = [];
@@ -28,6 +30,6 @@ public sealed record GameDataDocument
             Programs.Select(program => new EventProgram(program.Id, program.Commands.Select(command =>
                 new EventCommand(command.Id, command.Operation, command.Arguments, command.SourceOpcode, command.Text, command.Choices)))),
             Dialogues.Select(dialogue => new DialogueDefinition(dialogue.Id, dialogue.Pages)), ItemNames, InitialInventory,
-            UnavailablePrograms, VariableNames, Party, world, InitialItemIds);
+            UnavailablePrograms, VariableNames, Party, world, InitialItemIds, Shops);
     }
 }

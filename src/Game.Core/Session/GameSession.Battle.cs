@@ -52,6 +52,7 @@ public sealed partial class GameSession
             resources.Items, initialCostScale: _battleHpCostScale, random: Events!.DrawRandom, inventory: this, presentActions: true);
         _battleExperienceFlag = experienceFlag;
         Battle = candidate; LastBattleOutcome = null;
+        RequestMusic(definition.MusicId);
         LastBattleSettlement = null;
         PresentationRevision++;
     }
@@ -97,6 +98,8 @@ public sealed partial class GameSession
         _battleHpCostScale = battle.HpCostScale;
         LastBattleOutcome = battle.Outcome;
         Battle = null;
+        if (World.HasLegacyMetadata(World.CurrentSceneId))
+            RequestMusic(Math.Max(0, World.MetadataWord(-2, 7)));
         PresentationRevision++;
         return Events!.ResumeBattle(pending.Token);
     }

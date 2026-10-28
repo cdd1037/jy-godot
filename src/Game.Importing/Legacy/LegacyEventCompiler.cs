@@ -88,6 +88,8 @@ public static class LegacyEventCompiler
                 13 or 14 => EventOperation.Fade,
                 25 => EventOperation.PanCamera, 30 => EventOperation.ScriptedWalk, 44 => EventOperation.AnimatePair,
                 6 => EventOperation.Battle, 15 => EventOperation.Death, 24 => EventOperation.LoadMenu,
+                8 => EventOperation.ExitMusic, 57 => EventOperation.StatueAnimation, 58 => EventOperation.TournamentTrials,
+                62 => EventOperation.Ending, 64 => EventOperation.Shop, 66 => EventOperation.Music,
                 _ => throw new NotSupportedException($"KDEF {id}, word {pc}: opcode {opcode} is not implemented.")
             };
             if (opcode == 51) arguments = [2547, 18, 114, 0];
@@ -95,7 +97,7 @@ public static class LegacyEventCompiler
             // blocking order. Duration is a remake approximation, not DOS frames.
             if (opcode is 13 or 14) arguments = [opcode == 14 ? 1 : 0, 450];
             // Z.DAT sub_2F9F2: the second end word is never read.
-            if (opcode == 44) arguments = arguments.Take(5).ToArray();
+            if (opcode is 44 or 62) arguments = arguments.Take(5).ToArray();
             if (opcode == 6) arguments = [arguments[0], Target(arguments[1]), Target(arguments[2]), arguments[3]];
             if (opcode is 5 or 9 or 11)
             {
@@ -140,7 +142,7 @@ public static class LegacyEventCompiler
             // 15/24 transfer ownership to the outer load/quit lifecycle. Their
             // menus never return to the following instruction on success, and
             // declining exit or a failed load stays in the menu.
-            else if (operation is not (EventOperation.Stop or EventOperation.Death or EventOperation.LoadMenu)) pending.Enqueue(pc + width);
+            else if (operation is not (EventOperation.Stop or EventOperation.Death or EventOperation.LoadMenu or EventOperation.Ending)) pending.Enqueue(pc + width);
         }
         var result = new EventProgramDocument(id, commands.OrderBy(command => command.Id).ToArray());
         try { _ = new EventProgram(id, result.Commands.Select(command => new EventCommand(command.Id, command.Operation,

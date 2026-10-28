@@ -81,7 +81,7 @@ public partial class AppRoot
         side.AddChild(_coordinates);
         _explorationPanel = new VBoxContainer { Name = "ExplorationControls", SizeFlagsHorizontal = SizeFlags.ExpandFill };
         _explorationPanel.AddThemeConstantOverride("separation", 9);
-        ComposeBattleComponents(side);
+        ComposeGameplayComponents(side);
         side.AddChild(_explorationPanel);
         _explorationPanel.AddChild(new HSeparator());
         _explorationPanel.AddChild(Caption("资源库与场景预览"));
