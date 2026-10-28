@@ -45,6 +45,16 @@ public static class LegacyAssetImporter
             .Select(name => int.Parse(name.AsSpan(3), System.Globalization.CultureInfo.InvariantCulture)).Distinct().Order().ToArray();
         // Validate every discovered pair before decoding or writing any output.
         foreach (var id in sceneIds) { _ = Require($"SDX{id:D3}"); _ = Require($"SMP{id:D3}"); }
+        var battlefieldIds = names.Keys.Where(name => IsSceneFile(name, "WDX") || IsSceneFile(name, "WMP"))
+            .Select(name => int.Parse(name.AsSpan(3), System.Globalization.CultureInfo.InvariantCulture)).Distinct().Order().ToArray();
+        foreach (var id in battlefieldIds) { _ = Require($"WDX{id:D3}"); _ = Require($"WMP{id:D3}"); }
+        var fightIds = names.Keys.Where(name => name.Length == 12 && name.StartsWith("FIGHT", StringComparison.OrdinalIgnoreCase) &&
+                (name.EndsWith(".IDX", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".GRP", StringComparison.OrdinalIgnoreCase)) &&
+                int.TryParse(name.AsSpan(5, 3), out _))
+            .Select(name => int.Parse(name.AsSpan(5, 3), System.Globalization.CultureInfo.InvariantCulture)).Distinct().Order().ToArray();
+        foreach (var id in fightIds) { _ = Require($"FIGHT{id:D3}.IDX"); _ = Require($"FIGHT{id:D3}.GRP"); }
+        var hasEffects = names.ContainsKey("EFT.IDX") || names.ContainsKey("EFT.GRP");
+        if (hasEffects) { _ = Require("EFT.IDX"); _ = Require("EFT.GRP"); }
 
         var encodedToAsset = new Dictionary<string, string>(StringComparer.Ordinal);
         var assetOrdinals = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -65,12 +75,12 @@ public static class LegacyAssetImporter
             encodedToAsset.Add(encodedHash, hash);
             return hash;
         }
-        void Bank(string bank, LegacyArchive archive, bool doubledIds, bool aliasEmpty = false)
+        void Bank(string bank, LegacyArchive archive, bool doubledIds, bool aliasEmpty = false, int idOffset = 0)
         {
             var mapping = new Dictionary<int, string>();
             for (var index = 0; index < archive.Count; index++)
             {
-                var localId = doubledIds ? checked(index * 2) : index;
+                var localId = checked((doubledIds ? checked(index * 2) : index) + idOffset);
                 try { mapping.Add(localId, Frame(archive.Entry(index, aliasEmpty))); }
                 catch (InvalidDataException error) { throw new InvalidDataException($"Sprite bank {bank}, frame {localId}: {error.Message}", error); }
             }
@@ -93,6 +103,17 @@ public static class LegacyAssetImporter
             // but uses PackedArchive::entry, not SDX legacy_pointer_entry.
             Bank("world", LegacyArchive.Parse(read(Require("MMAP.IDX")), read(Require("MMAP.GRP"))), doubledIds: true);
         }
+        foreach (var id in battlefieldIds)
+        {
+            progress?.Report($"聚合战场图像：WMP{id:D3}");
+            // WDX has a sentinel but no SDX empty-pointer alias: the battle
+            // renderer reads the exact cumulative slice, including an EOF frame.
+            Bank($"battlefield/{id:D3}", LegacyArchive.Parse(read(Require($"WDX{id:D3}")), read(Require($"WMP{id:D3}")), sentinel: true), doubledIds: true);
+        }
+        foreach (var id in fightIds)
+            Bank($"fight/{id:D3}", LegacyArchive.Parse(read(Require($"FIGHT{id:D3}.IDX")), read(Require($"FIGHT{id:D3}.GRP"))), doubledIds: true, idOffset: 16000);
+        if (hasEffects)
+            Bank("effect", LegacyArchive.Parse(read(Require("EFT.IDX")), read(Require("EFT.GRP"))), doubledIds: true, idOffset: 13000);
         progress?.Report($"写入共享图集：{unique.Count} 个唯一图像，{banks.Sum(pair => pair.Value.Count)} 个本地编号…");
         // Palette has already been expanded with LegacySpriteDecoder.ReadPalette.
         // One writer call packs all unique frames, never a separate atlas per scene.

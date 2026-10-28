@@ -199,7 +199,7 @@ public sealed class GameLibraryTests
         MinimalOriginal(source);
         var included = new Dictionary<string, byte[]>
         {
-            ["GAME01.XMI"] = [1, 2, 3], ["E01.WAV"] = [4, 5, 6], ["WAR.STA"] = [7, 8],
+            ["GAME01.XMI"] = [1, 2, 3], ["E01.WAV"] = [4, 5, 6], ["HERO.STA"] = [7, 8],
             ["FONT.C16"] = [9, 10], ["TITLE.BIG"] = [11, 12], ["ENDCOL.COL"] = [13, 14]
         };
         var excluded = new[] { "Z.COM", "Z.DAT", "DOS4GW.EXE", "RANGER1.GRP", "RANGER1.IDX", "S1", "D1", "CT-VOICE.DRV", "JY.INI", "README.TXT" };

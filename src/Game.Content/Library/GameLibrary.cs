@@ -5,6 +5,7 @@ using JinYong.Content.Legacy;
 using JinYong.Content.Packages;
 using JinYong.Core.Events;
 using JinYong.Core.Maps;
+using JinYong.Core.Battles;
 
 namespace JinYong.Content.Library;
 
@@ -14,13 +15,14 @@ public sealed class GameLibrary
     private readonly StoryCatalog _definitions;
     private GameLibrary(string directory, GameLibraryManifest manifest, LibraryScene[] scenes, GameDataDocument gameplay,
         WorldDefinition world, SharedSpriteCatalog sprites, LibraryAudio audio, Dictionary<string, SourceResource> sources,
-        StoryCatalog definitions, WorldMapDefinition? mainMap)
+        StoryCatalog definitions, WorldMapDefinition? mainMap, BattleCatalog? battles)
     {
         Directory = directory; Manifest = manifest; Scenes = Array.AsReadOnly(scenes); GameData = gameplay;
         World = world; Sprites = sprites; Audio = audio;
         Sources = new ReadOnlyDictionary<string, SourceResource>(sources);
         _definitions = definitions;
         MainMap = mainMap;
+        Battles = battles;
     }
 
     public string Directory { get; }
@@ -29,6 +31,7 @@ public sealed class GameLibrary
     public GameDataDocument GameData { get; }
     public WorldDefinition World { get; }
     public WorldMapDefinition? MainMap { get; }
+    public BattleCatalog? Battles { get; }
     public SharedSpriteCatalog Sprites { get; }
     public LibraryAudio Audio { get; }
     public IReadOnlyDictionary<string, SourceResource> Sources { get; }
@@ -103,7 +106,8 @@ public sealed class GameLibrary
         }
         foreach (var (bank, entries) in sprites.Banks)
         foreach (var (id, asset) in entries)
-            if (id < 0 || ((bank == "world" || bank.StartsWith("scene/", StringComparison.Ordinal)) && (id & 1) != 0) || !sprites.Assets.ContainsKey(asset))
+            if (id < 0 || ((bank is "world" or "effect" || bank.StartsWith("scene/", StringComparison.Ordinal) ||
+                bank.StartsWith("battlefield/", StringComparison.Ordinal) || bank.StartsWith("fight/", StringComparison.Ordinal)) && (id & 1) != 0) || !sprites.Assets.ContainsKey(asset))
                 throw new InvalidDataException($"Sprite bank {bank} has an invalid original-ID mapping.");
         foreach (var scene in scenes.Where(scene => scene.SpriteBank is not null))
             if (!sprites.Banks.ContainsKey(scene.SpriteBank!)) throw new InvalidDataException($"Missing sprite bank for scene {scene.SceneId}.");
@@ -145,8 +149,37 @@ public sealed class GameLibrary
                 if (!worldFrames.TryGetValue(first + offset, out var asset) || sprites.Assets[asset].Width == 0)
                     throw new InvalidDataException($"World actor sprite {first + offset} is missing or empty.");
         }
+        BattleCatalog? battles = null;
+        if ((manifest.Battles is null) != (manifest.Battlefields is null))
+            throw new InvalidDataException("Battle definitions and battlefield data must be provided together.");
+        if (manifest.Battles is { } battlePath)
+        {
+            var document = ContentJson.Read<LibraryBattleDocument>(Tracked(battlePath));
+            var bytes = File.ReadAllBytes(Tracked(manifest.Battlefields!));
+            const int fieldWords = BattlefieldDefinition.LayerCount * BattlefieldDefinition.TileCount;
+            if (document.FormatVersion != 1 || document.BattlefieldIds.Distinct().Count() != document.BattlefieldIds.Length ||
+                bytes.LongLength != (long)document.BattlefieldIds.Length * fieldWords * 2)
+                throw new InvalidDataException("Invalid battle definition version, field index or battlefield length.");
+            var fields = new List<BattlefieldDefinition>();
+            for (var field = 0; field < document.BattlefieldIds.Length; field++)
+            {
+                var words = new short[fieldWords];
+                for (var word = 0; word < words.Length; word++)
+                    words[word] = BinaryPrimitives.ReadInt16LittleEndian(bytes.AsSpan((field * fieldWords + word) * 2));
+                fields.Add(new(document.BattlefieldIds[field], words));
+            }
+            battles = new(document.Battles, fields, document.Magics, document.Items, gameplay.Party, document.Progression);
+            foreach (var field in fields)
+            {
+                if (!sprites.Banks.TryGetValue($"battlefield/{field.Id:D3}", out var frames))
+                    throw new InvalidDataException($"Battlefield {field.Id} has no sprite bank.");
+                foreach (var picture in field.Layers.Distinct())
+                    if (picture != 0 && !frames.ContainsKey(picture))
+                        throw new InvalidDataException($"Battlefield {field.Id} references missing sprite {picture}.");
+            }
+        }
         var sharedCatalog = gameplay.ToStoryCatalog(manifest.DefaultScene, world: world);
-        return new(directory, manifest, scenes, gameplay, world, sprites, audio, sources, sharedCatalog, mainMap);
+        return new(directory, manifest, scenes, gameplay, world, sprites, audio, sources, sharedCatalog, mainMap, battles);
     }
 
     public ScenePackage OpenScene(int? sceneId = null, GridPosition? spawn = null, StoryDocument? overlay = null, bool validateSpawn = true)
@@ -230,6 +263,26 @@ public sealed class GameLibrary
         {
             FormatVersion = 3, Id = "base:world", LegacySceneId = -1, Name = "江湖世界",
             Layers = Manifest.MainMap!, Palette = Manifest.Palette,
+            Sprites = mapping.OrderBy(pair => pair.Key).Select(pair => Sprites.Assets[pair.Value] with { LegacyId = pair.Key }).ToArray(),
+            Portraits = Sprites.Banks["portrait"].OrderBy(pair => pair.Key).Select(pair => Sprites.Assets[pair.Value] with { LegacyId = pair.Key }).ToArray(),
+            PortraitNames = GameData.PortraitNames, Sounds = Audio.Effects, Story = Manifest.GameData
+        };
+        return new(Directory, new PackageManifest
+        {
+            FormatVersion = 3, Id = Manifest.Id, EngineApi = Manifest.EngineApi, Version = Manifest.Version,
+            Scene = Manifest.SceneIndex, FileHashes = Manifest.FileHashes, SourceHashes = Manifest.SourceHashes
+        }, document, session.Definition, session.Story) { Library = this };
+    }
+
+    public ScenePackage OpenBattleView(JinYong.Core.Session.GameSession session)
+    {
+        var battle = session.Battle ?? throw new InvalidOperationException("No battle is active.");
+        var bank = $"battlefield/{battle.Battlefield.Id:D3}";
+        if (!Sprites.Banks.TryGetValue(bank, out var mapping)) throw new InvalidDataException($"Missing battle sprite bank {bank}.");
+        var document = new SceneDocument
+        {
+            FormatVersion = 3, Id = $"base:battle/{battle.Definition.Id:D3}", LegacySceneId = -2,
+            Name = battle.Definition.Name, Layers = Manifest.Battlefields!, Palette = Manifest.Palette,
             Sprites = mapping.OrderBy(pair => pair.Key).Select(pair => Sprites.Assets[pair.Value] with { LegacyId = pair.Key }).ToArray(),
             Portraits = Sprites.Banks["portrait"].OrderBy(pair => pair.Key).Select(pair => Sprites.Assets[pair.Value] with { LegacyId = pair.Key }).ToArray(),
             PortraitNames = GameData.PortraitNames, Sounds = Audio.Effects, Story = Manifest.GameData

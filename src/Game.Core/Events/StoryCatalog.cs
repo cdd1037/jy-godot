@@ -12,7 +12,7 @@ public enum EventOperation
     JoinParty, LeaveParty, RestParty, ClearPartyMp, SetRoleAttribute, AddRoleAttribute,
     BranchRole, LearnMagic, SetMagic, RoleAddItem, NoticeRole, BranchParty, BranchPartyFull,
     BranchPartyFemale, DismissParty, AddFame, IncrementEventScripts, ReplaceTiles, OpenScene,
-    OpenAllScenes, BranchBooks, MoveShop, BranchItemExists, Fade, PanCamera, ScriptedWalk, AnimatePair
+    OpenAllScenes, BranchBooks, MoveShop, BranchItemExists, Fade, PanCamera, ScriptedWalk, AnimatePair, Battle
 }
 public enum EventComparison { Equal, NotEqual, Less, LessOrEqual, Greater, GreaterOrEqual }
 public sealed record EventChoice(string Text, int Target);
@@ -41,7 +41,7 @@ public sealed class EventCommand
                 EventOperation.NoticeRole or EventOperation.BranchPartyFull or EventOperation.BranchPartyFemale or EventOperation.BranchBooks or EventOperation.Fade => 2,
             EventOperation.BranchUsedItem => 3,
             EventOperation.RandomDialogue or EventOperation.BranchItem or EventOperation.SetMagic or EventOperation.ReplaceTiles or
-                EventOperation.PanCamera or EventOperation.ScriptedWalk => 4,
+                EventOperation.PanCamera or EventOperation.ScriptedWalk or EventOperation.Battle => 4,
             EventOperation.BranchVariable or EventOperation.SetTile or EventOperation.IncrementEventScripts or EventOperation.AnimatePair => 5,
             EventOperation.BranchEvent or EventOperation.BranchRole => 6,
             EventOperation.BranchAllItems => 7,
@@ -63,6 +63,8 @@ public sealed class EventCommand
             throw new ArgumentException("Fade needs a black target of zero or one and a duration between zero and 60000 milliseconds.");
         if (operation == EventOperation.Face && _arguments[0] is < 0 or > 3)
             throw new ArgumentException("Invalid facing direction.");
+        if (operation == EventOperation.Battle && (_arguments[0] < 0 || _arguments[3] is < short.MinValue or > short.MaxValue))
+            throw new ArgumentException("Battle needs a nonnegative definition ID and a signed reward flag.");
         if (operation == EventOperation.BranchVariable && !Enum.IsDefined((EventComparison)_arguments[1]))
             throw new ArgumentException("Invalid variable comparison.");
         if (operation == EventOperation.BranchItem && _arguments[1] < 0) throw new ArgumentException("Negative required item count.");
@@ -117,6 +119,7 @@ public sealed class EventProgram
     public static IEnumerable<int> Targets(EventCommand command) => command.Operation switch
     {
         EventOperation.Jump => command.Arguments,
+        EventOperation.Battle => command.Arguments.Skip(1).Take(2),
         EventOperation.BranchItem or EventOperation.BranchUsedItem or EventOperation.BranchVariable or EventOperation.BranchEvent or EventOperation.BranchAllItems or
             EventOperation.BranchRole or EventOperation.BranchParty or EventOperation.BranchPartyFull or EventOperation.BranchPartyFemale or
             EventOperation.BranchBooks or EventOperation.BranchItemExists => command.Arguments.TakeLast(2),

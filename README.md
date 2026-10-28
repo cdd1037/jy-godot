@@ -31,15 +31,18 @@
 
 已接入主角家的开场、娃娃交谈、8 个箱子、床的休息流程，以及选择、任务变量、物品使用、队伍、人物属性、武功和跨场景数据修改。库中集中保留人物、初始背包、全局脚本和对白、地图事件、共享图像及来源资源缓存。
 
-统一事件执行器有 **52 种标准命令**。原版 68 个编号中 **59 个已有转换**；已知原版 KDEF 中 **882/1,018 段完整编译通过**。这些数字分别表示内部接口与编译兼容，不代表完整剧情运行验收。世界地图行走、乘船规则、入口条件、场景进出与关联跳转已接入；剧情镜头、行走和双对象动画使用同一执行器。战斗、存档、音乐播放、商店和结局仍未实现；世界恢复、天气及待机动画也尚待补齐。
+统一事件执行器有 **53 种标准命令**。原版 68 个编号中 **60 个已有转换**；已知原版 KDEF 中 **910/1,018 段完整编译通过**。这些数字分别表示内部接口与编译兼容，不代表完整剧情运行验收。世界地图、场景进出、剧情镜头、行走和双对象动画已接入。战斗已有出战选择、移动、武功、有限敌方行动、胜败及经验/升级/修炼/制作结算；完整 AI、道具与医疗等动作、战斗动画/声音仍待补齐。存档、音乐播放、商店、结局和世界恢复/天气也尚未完成。
 
 独立编写的任务样例直接叠加到本机基础库，不复制图片或生成新场景包：
 
 ```powershell
 .\run.ps1 -EventDemo
+.\run.ps1 -BattleDemo
 ```
 
 按 E 找面前娃娃接任务，再从行囊使用“测试信物”交付，领取一次奖励。自定义剧情可用 `-StoryOverlay 'content\mods\example.json'`；当前是显式单个剧情叠加，尚无完整 MOD 发现、排序和冲突管理界面。
+
+`-BattleDemo` 则让娃娃发起原版战斗 0“斗胡斐”。确认出战后，在侧栏选行动并点击战场格子；结束后返回同一场景继续胜败对白。原版初始主角很弱，示例不保证获胜。新版完整库导入需要 `Z.DAT` 以读取经验表等规则数据，运行时不需要 DOS 程序。
 
 ## 操作
 
@@ -57,10 +60,11 @@ dotnet tools/Game.Tools/bin/Debug/net10.0/Game.Tools.dll inspect --library conte
 dotnet tools/Game.Tools/bin/Debug/net10.0/Game.Tools.dll audit-events --source 'D:\Games\LEGEND' --output '.local/opcodes.json'
 .\run.ps1 -Smoke -Headless -Report .local/verification/smoke.json
 .\run.ps1 -Smoke -TravelSmoke -Headless -Report .local/verification/travel.json
+.\run.ps1 -Smoke -BattleDemo -BattleSmoke -Headless -Report .local/verification/battle.json
 ```
 
 `build.ps1` 构建解决方案并运行测试。合成夹具由测试独立编写，不含原作资源。真实资源测试通过 `JINYONG_ORIGINAL_DATA` 或本地 `.local/original-data.txt` 指定来源；缺少原版数据时相应测试明确标记为不可用。完整开场冒烟加 `-PlayOpening`，任务样例冒烟加 `-EventDemo`；画面截图需正常渲染模式，使用 `-Capture` 指定输出。
 
 源码、文档与独立示例纳入版本控制；`content/base/`、旧导入包、`.local/`、Godot 缓存和构建产物不提交。原作资源及其解码结果不分发，项目当前未提供源码许可声明。
 
-参阅 [工程结构](docs/project-layout.md)、[中央资源库](docs/resource-library.md)、[世界旅行](docs/world-travel.md)、[架构](docs/architecture.md)、[事件编写](docs/event-authoring.md)、[指令兼容](docs/original-opcode-coverage.md)、[验证记录](docs/verification.md) 和 [参与开发](CONTRIBUTING.md)。
+参阅 [工程结构](docs/project-layout.md)、[中央资源库](docs/resource-library.md)、[世界旅行](docs/world-travel.md)、[战斗](docs/battles.md)、[架构](docs/architecture.md)、[事件编写](docs/event-authoring.md)、[指令兼容](docs/original-opcode-coverage.md)、[验证记录](docs/verification.md) 和 [参与开发](CONTRIBUTING.md)。

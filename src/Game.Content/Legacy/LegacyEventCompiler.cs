@@ -87,6 +87,7 @@ public static class LegacyEventCompiler
                 61 => EventOperation.BranchBooks, 65 => EventOperation.MoveShop,
                 13 or 14 => EventOperation.Fade,
                 25 => EventOperation.PanCamera, 30 => EventOperation.ScriptedWalk, 44 => EventOperation.AnimatePair,
+                6 => EventOperation.Battle,
                 _ => throw new NotSupportedException($"KDEF {id}, word {pc}: opcode {opcode} is not implemented.")
             };
             if (opcode == 51) arguments = [2547, 18, 114, 0];
@@ -95,6 +96,7 @@ public static class LegacyEventCompiler
             if (opcode is 13 or 14) arguments = [opcode == 14 ? 1 : 0, 450];
             // Z.DAT sub_2F9F2: the second end word is never read.
             if (opcode == 44) arguments = arguments.Take(5).ToArray();
+            if (opcode == 6) arguments = [arguments[0], Target(arguments[1]), Target(arguments[2]), arguments[3]];
             if (opcode is 5 or 9 or 11)
             {
                 text = opcode == 5 ? "是否与之过招？" : opcode == 9 ? "是否邀请加入？" : "是否休息？";
@@ -124,7 +126,11 @@ public static class LegacyEventCompiler
             else if (opcode == 60) arguments = [arguments[0], arguments[1], 5, arguments[2], Target(arguments[3]), Target(arguments[4])];
             var command = new EventCommandDocument(pc, operation, arguments, opcode, text, choices);
             commands.Add(command);
-            if (operation is EventOperation.Choice or EventOperation.BranchItem or EventOperation.BranchUsedItem or EventOperation.BranchAllItems or EventOperation.BranchEvent
+            if (operation == EventOperation.Battle)
+            {
+                pending.Enqueue(arguments[1]); pending.Enqueue(arguments[2]);
+            }
+            else if (operation is EventOperation.Choice or EventOperation.BranchItem or EventOperation.BranchUsedItem or EventOperation.BranchAllItems or EventOperation.BranchEvent
                 or EventOperation.BranchItemExists or EventOperation.BranchParty or EventOperation.BranchPartyFull
                 or EventOperation.BranchPartyFemale or EventOperation.BranchRole or EventOperation.BranchBooks)
             {

@@ -115,7 +115,7 @@ public sealed class LegacyPartyCompilerTests
     [TestMethod]
     public void InstructionsWithoutRealBackendsAreStillRejected()
     {
-        Assert.ThrowsExactly<NotSupportedException>(() => Compile(6,1,0,0,0,-1));
+        Assert.ThrowsExactly<NotSupportedException>(() => Compile(8,1,-1));
         Assert.ThrowsExactly<NotSupportedException>(() => Compile(24,-1));
         Assert.ThrowsExactly<NotSupportedException>(() => Compile(62,0,2,4,1,6,8,-1));
     }

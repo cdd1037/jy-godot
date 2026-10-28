@@ -28,14 +28,14 @@ public sealed class GameDataImportTests
     public void ActualGlobalCatalogClassifiesEveryScriptAndValidatesAllReferencesTogether()
     {
         var data = Original.Value;
-        Assert.AreEqual(882, data.Programs.Length);
-        Assert.AreEqual(136, data.UnavailablePrograms.Count);
+        Assert.AreEqual(910, data.Programs.Length);
+        Assert.AreEqual(108, data.UnavailablePrograms.Count);
         CollectionAssert.AreEquivalent(Enumerable.Range(0, 1018).ToArray(),
             data.Programs.Select(program => program.Id).Concat(data.UnavailablePrograms.Keys).ToArray());
         Assert.AreEqual(320, data.Party!.Roles.Count); Assert.AreEqual(200, data.ItemNames.Count);
         Assert.IsTrue(data.UnavailablePrograms.Values.All(reason => !string.IsNullOrWhiteSpace(reason)));
         var catalog = data.ToStoryCatalog(70, 691, 0, 6890, Direction.Right);
-        Assert.AreEqual(691, catalog.InitialProgramId); Assert.AreEqual(882, catalog.Programs.Count);
+        Assert.AreEqual(691, catalog.InitialProgramId); Assert.AreEqual(910, catalog.Programs.Count);
         Assert.IsNull(catalog.World);
         var referenced = data.Programs.SelectMany(program => program.Commands).SelectMany(command => command.Operation switch
         {
@@ -98,7 +98,7 @@ public sealed class GameDataImportTests
         byte[] Script(params short[] words) => words.SelectMany(BitConverter.GetBytes).ToArray();
         Pair("KDEF", Script(-1), Script(23, 999, 1, -1), Script(1, 9999, 0, 0, -1),
             Script(3, -2, 0, -2, -2, 99, -1, -1, -2, -2, -2, -2, -2, -2, -1),
-            Script(6, 1, 0, 0, 0, -1),
+            Script(8, 1, -1),
             Script(3, -2, 0, -2, -2, 4, -1, -1, -2, -2, -2, -2, -2, -2, -1), Script(1, 0, 0, 0, -1));
         Pair("TALK", new byte[] { 0 }, new byte[] { 0x7E });
         var reads = new Dictionary<string, int>();
@@ -113,7 +113,7 @@ public sealed class GameDataImportTests
         StringAssert.Contains(data.UnavailablePrograms[1], "Unknown role");
         StringAssert.Contains(data.UnavailablePrograms[2], "TALK 9999");
         StringAssert.Contains(data.UnavailablePrograms[3], "Unknown replacement");
-        StringAssert.Contains(data.UnavailablePrograms[4], "opcode 6");
+        StringAssert.Contains(data.UnavailablePrograms[4], "opcode 8");
         CollectionAssert.AreEqual(new[] { 0 }, data.Dialogues.Select(dialogue => dialogue.Id).ToArray());
         Assert.IsTrue(reads.Values.All(count => count == 1));
         _ = data.ToStoryCatalog(70);

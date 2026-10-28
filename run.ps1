@@ -10,6 +10,8 @@ param(
     [switch]$GridMovement,
     [switch]$PlayOpening,
     [switch]$EventDemo,
+    [switch]$BattleDemo,
+    [switch]$BattleSmoke,
     [switch]$TravelSmoke,
     [string]$StoryOverlay
 )
@@ -23,6 +25,11 @@ if ($EventDemo) {
     if ($Scene -ne 70) { throw "-EventDemo requires scene 70." }
     $StoryOverlay = Join-Path $PSScriptRoot "content\examples\event-demo.json"
 }
+if ($BattleDemo) {
+    if ($StoryOverlay -or $EventDemo -or $Scene -ne 70) { throw "-BattleDemo requires scene 70 and no other story overlay." }
+    $StoryOverlay = Join-Path $PSScriptRoot "content/examples/battle-demo.json"
+}
+if ($BattleSmoke -and (-not $Smoke -or -not $BattleDemo -or $TravelSmoke)) { throw "-BattleSmoke requires -Smoke -BattleDemo and no -TravelSmoke." }
 if ($Package -and $Source) { throw "Use either -Library/-Package or -Source." }
 if ($TravelSmoke -and (-not $Smoke -or $EventDemo -or $Scene -ne 70)) { throw "-TravelSmoke requires -Smoke, scene 70, and no -EventDemo." }
 $arguments = @("--path", (Join-Path $PSScriptRoot "godot"))
@@ -38,6 +45,7 @@ if ($GridMovement) { $arguments += "--grid-movement" }
 if ($PlayOpening) { $arguments += "--play-opening" }
 if ($EventDemo -and $Smoke) { $arguments += "--event-smoke" }
 if ($TravelSmoke) { $arguments += "--travel-smoke" }
+if ($BattleSmoke) { $arguments += "--battle-smoke" }
 if ($Capture) { $arguments += @("--capture", [IO.Path]::GetFullPath($Capture)) }
 if ($Report) { $arguments += @("--report", [IO.Path]::GetFullPath($Report)) }
 & $Godot @arguments

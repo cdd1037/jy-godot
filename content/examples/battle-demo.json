@@ -1,0 +1,32 @@
+{
+  "format_version": 1,
+  "scene_id": 70,
+  "initial_program_id": 11000,
+  "initial_facing": "right",
+  "variable_names": { "0": "example:battle/result" },
+  "programs": [
+    { "id": 11000, "commands": [
+      { "id": 0, "operation": "call", "arguments": [691] },
+      { "id": 1, "operation": "change_event", "arguments": [-2, 1, 1, -2, 11001, -1, -1, 6888, 6888, 6888, -2, 20, 20] },
+      { "id": 2, "operation": "face", "arguments": [1] },
+      { "id": 3, "operation": "end", "arguments": [] }
+    ] },
+    { "id": 11001, "commands": [
+      { "id": 0, "operation": "choice", "arguments": [90], "text": "进行一次与胡斐的切磋？", "choices": [
+        { "text": "开始切磋", "target": 10 }, { "text": "稍后再来", "target": 90 }
+      ] },
+      { "id": 10, "operation": "battle", "arguments": [0, 20, 30, 0] },
+      { "id": 20, "operation": "set_variable", "arguments": [0, 1] },
+      { "id": 21, "operation": "dialogue", "arguments": [11000, 114, 0] },
+      { "id": 22, "operation": "end", "arguments": [] },
+      { "id": 30, "operation": "set_variable", "arguments": [0, 2] },
+      { "id": 31, "operation": "dialogue", "arguments": [11001, 114, 0] },
+      { "id": 32, "operation": "end", "arguments": [] },
+      { "id": 90, "operation": "end", "arguments": [] }
+    ] }
+  ],
+  "dialogues": [
+    { "id": 11000, "pages": ["切磋获胜，继续你的江湖之旅吧。"] },
+    { "id": 11001, "pages": ["胜败乃兵家常事。休息一下，练好武功再来吧。"] }
+  ]
+}

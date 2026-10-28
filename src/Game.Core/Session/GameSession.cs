@@ -1,6 +1,7 @@
 using JinYong.Core.Maps;
 using JinYong.Core.Events;
 using System.Collections.ObjectModel;
+using JinYong.Core.Battles;
 
 namespace JinYong.Core.Session;
 
@@ -25,7 +26,7 @@ public sealed partial class GameSession : IEventWorld
     private readonly StoryCatalog? _story;
 
     public GameSession(SceneDefinition scene, StoryCatalog? story = null, bool skipOpening = false,
-        WorldMapDefinition? worldMap = null, WorldTravelSnapshot? travelStart = null)
+        WorldMapDefinition? worldMap = null, WorldTravelSnapshot? travelStart = null, BattleCatalog? battles = null)
     {
         Definition = scene;
         Scene = new SceneRuntimeState(scene);
@@ -33,6 +34,7 @@ public sealed partial class GameSession : IEventWorld
         World = new SceneWorldState(story?.SceneId ?? 0, Scene, story?.World);
         Party = story?.Party is { } party ? new PartyState(party) : null;
         MainMap = worldMap;
+        BattleResources = battles;
         Travel = worldMap is not null && travelStart is not null ? new WorldTravelState(travelStart) : null;
         _position = scene.Spawn;
         var block = SceneMovementRules.Check(scene, _position, _position);
@@ -216,5 +218,6 @@ public sealed partial class GameSession : IEventWorld
         }
         ValidateGameCommand(command, context);
         ValidatePresentationCommand(command);
+        ValidateBattleCommand(command);
     }
 }

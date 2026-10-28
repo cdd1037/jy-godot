@@ -87,7 +87,8 @@ public partial class SceneView : Control
                 portraits.Add(sprite.LegacyId, portrait);
             }
             session = retainedSession ?? new GameSession(package.Scene, package.Story, skipOpening: !PlayOpening,
-                worldMap: package.Library?.MainMap, travelStart: package.Library?.GameData.TravelStart);
+                worldMap: package.Library?.MainMap, travelStart: package.Library?.GameData.TravelStart,
+                battles: package.Library?.Battles);
             if (travelToken is { } token && !session.CommitTravel(token))
                 throw new InvalidOperationException("The scene transition is no longer ready.");
             walker = new SceneWalker(session);
@@ -141,6 +142,7 @@ public partial class SceneView : Control
 
     public override void _GuiInput(InputEvent input)
     {
+        if (TryHandleBattleClick(input)) { AcceptEvent(); return; }
         if (input is not InputEventMouseButton { Pressed: true } mouse) return;
         if (mouse.ButtonIndex == MouseButton.WheelUp) _zoom = Math.Min(4, _zoom + 0.25f);
         else if (mouse.ButtonIndex == MouseButton.WheelDown) _zoom = Math.Max(1, _zoom - 0.25f);
@@ -166,6 +168,7 @@ public partial class SceneView : Control
             return;
         }
 
+        if (_session.Battle is not null) { DrawBattle(); return; }
         if (_session.IsWorld)
         {
             DrawWorld();

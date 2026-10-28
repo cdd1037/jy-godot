@@ -13,6 +13,8 @@ content/base/
 │   ├── world.layers.bin    集中保存所有场景的地图层
 │   ├── world.events.bin    集中保存所有场景的事件记录
 │   ├── main-map.bin        世界地图五层 480×480 原始编号
+│   ├── battles.json        战斗、武功、物品与原版成长规则
+│   ├── battlefields.bin    集中保存两层 64×64 战场
 │   ├── sprites.json        资源 bank / 原始 ID 到共享图片资产的映射
 │   ├── audio.json          事件音效、攻击音效与音乐资源索引
 │   └── source-index.json   原始文件名到哈希、大小、存储路径与种类
@@ -40,7 +42,9 @@ content/base/
 
 来源缓存保留后续解码所需的白名单游戏资源。`data/source-index.json` 以原始文件名为键，记录 `sha256`、`size`、`storage`、`kind`，存储路径指向 `assets/source/` 中按哈希寻址的内容。音效后缀为 `.wav`，音乐为 `.xmi`，其他数据为 `.bin`。原始编号、来源文件名与存储文件分离，不因内容去重丢失映射。
 
-`data/audio.json` 的 `effects`、`attacks`、`music` 分别索引 E 系列音效、攻击音效与 GAME 系列 XMI。当前接通事件 WAV 播放；音乐与攻击音效缓存不代表已经接通音乐播放或战斗。库内也保留白名单字体、战斗和标题等原始资源，等待对应功能后续解码与使用。
+战斗采用同一张全局图像资产表：`battlefield/000` 等 bank 保留 WDX/WMP 双倍编号及 EOF 帧，空帧不按 SDX 别名处理；`effect` 使用 `13000+2*i`，`fight/000` 等使用 `16000+2*i`。全部仍经一次共享图集打包。定义、武功和原物品字位于 `battles.json`，战场位于统一 `battlefields.bin`，不再导出战斗专用包。
+
+`Z.DAT` 只在导入时抽取经指令布局校验的经验表与成长常量，程序自身不进入 source vault；其指纹登记在 `source_hashes`，因此来源指纹数可能大于缓存文件索引数。运行只读取解析后的数据。`data/audio.json` 的事件 WAV 已接通，攻击 WAV 和 XMI 尚未用于战斗播放，相关缓存不能视作音效/音乐验收。
 
 缓存只能接纳导入器明确列出的游戏数据格式；不递归复制原版目录，不缓存 DOS 可执行文件、驱动、配置和用户存档。源目录保持只读，生成库必须位于源目录之外。读取库文件时使用受库根约束的相对路径，校验哈希及必要的数据尺寸，不能接受越出库目录的路径。
 

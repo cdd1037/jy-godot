@@ -130,7 +130,7 @@ public sealed class EventTests
         Assert.AreEqual(EventOperation.Dialogue, program.Commands[0].Operation);
         Assert.AreEqual(1, program.Commands[0].SourceOpcode);
         Assert.AreEqual(EventOperation.RestParty, LegacyEventCompiler.Compile(931, Bytes(12,-1)).Commands[0].Operation);
-        Assert.ThrowsExactly<NotSupportedException>(() => LegacyEventCompiler.Compile(1, Bytes(6,0,0,0,0,-1)));
+        Assert.ThrowsExactly<NotSupportedException>(() => LegacyEventCompiler.Compile(1, Bytes(8,0,-1)));
         Assert.ThrowsExactly<InvalidDataException>(() => LegacyEventCompiler.Compile(1, Bytes(1,2520)));
         Assert.ThrowsExactly<InvalidDataException>(() => LegacyEventCompiler.Compile(1, Bytes(40,0)));
         Assert.ThrowsExactly<ArgumentException>(() => Command(1,EventOperation.ChangeEvent,0));

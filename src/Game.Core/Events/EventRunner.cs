@@ -26,12 +26,15 @@ public interface IEventWorld
     void EndScriptedWalk() => throw new InvalidOperationException("Scripted movement service is unavailable.");
     void CancelScriptedMotion() { }
     void SetPictureWrapped(int eventIndex, int picture) => SetPicture(eventIndex, unchecked((short)picture));
+    void BeginBattle(int battleId, int experienceFlag) => throw new InvalidOperationException("Battle service is unavailable.");
+    bool TryGetBattleOutcome(out bool victory) { victory = false; return false; }
 }
 
 public enum EventPresentationKind { Dialogue, Item, Error, Choice, Notice }
 public sealed record EventPresentation(long Token, EventPresentationKind Kind, int DialogueId,
     int PortraitId, int Style, string Text, int Page, int PageCount, IReadOnlyList<EventChoice>? Choices = null, bool CanCancel = false);
 public sealed record EventTrace(int Program, int Command, EventOperation Operation);
+public sealed record EventBattleRequest(long Token, int BattleId, int ExperienceFlag);
 
 public sealed class EventRunner
 {
@@ -64,6 +67,8 @@ public sealed class EventRunner
     private int _sceneX, _sceneY, _targetX, _targetY;
     private int _pairFirstEvent, _pairFirstFrame, _pairFirstEnd, _pairSecondEvent, _pairSecondFrame;
     private TimeSpan _sceneWait;
+    private EventCommand? _battleCommand;
+    public EventBattleRequest? PendingBattle { get; private set; }
 
     public EventRunner(StoryCatalog catalog, IEventWorld world, uint randomSeed = 1)
     {
@@ -78,6 +83,7 @@ public sealed class EventRunner
     public int CompletedCount => _completed.Count;
     public IReadOnlyList<int> CompletedPrograms => _completed.AsReadOnly();
     public IReadOnlyList<EventTrace> Trace => _trace.ToArray();
+    internal int DrawRandom(int bound) => bound <= 1 || bound > 30000 ? 0 : RandomBounded(bound);
 
     public bool TryStart(int programId, int eventContext, GridPosition trigger, int usedItem = -1)
     {
@@ -145,10 +151,20 @@ public sealed class EventRunner
         return true;
     }
 
+    /// <summary>The world owns the completed battle; a confirmation cannot choose its outcome.</summary>
+    public bool ResumeBattle(long token)
+    {
+        if (PendingBattle?.Token != token || _battleCommand is not { } command || !_world.TryGetBattleOutcome(out var victory)) return false;
+        _cursor = _program!.IndexOf(command.Arguments[victory ? 1 : 2]);
+        PendingBattle = null; _battleCommand = null;
+        Pump();
+        return true;
+    }
+
     public void Advance(TimeSpan elapsed)
     {
         if (elapsed < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(elapsed));
-        if (Pending is not null || _program is null) return;
+        if (Pending is not null || PendingBattle is not null || _program is null) return;
         if (_sceneOperation is not null)
         {
             try
@@ -301,6 +317,11 @@ public sealed class EventRunner
                             command.Choices, _cancelTarget != -1);
                         return;
                     case EventOperation.Wait: _wait = TimeSpan.FromMilliseconds(arguments[0]); return;
+                    case EventOperation.Battle:
+                        _world.BeginBattle(arguments[0], arguments[3]);
+                        _battleCommand = command;
+                        PendingBattle = new(++_token, arguments[0], arguments[3]);
+                        return;
                     case EventOperation.PanCamera:
                     case EventOperation.ScriptedWalk:
                         _sceneOperation = command.Operation; _sceneCommand = command;
@@ -384,6 +405,7 @@ public sealed class EventRunner
         _sceneOperation = null; _sceneCommand = null; _sceneWait = TimeSpan.Zero;
         _animating = _refresh = _fading = false;
         _wait = null; _fadeCommand = null;
+        PendingBattle = null; _battleCommand = null;
         _fadeElapsed = _fadeDuration = TimeSpan.Zero;
     }
 

@@ -22,6 +22,7 @@ public partial class AppRoot : Control
     private bool _dialogueCaptured, _capturingDialogue, _smokeConfirmPressed;
     private readonly HashSet<long> _smokePages = [];
     private Label _sceneName = null!, _coordinates = null!, _status = null!, _details = null!;
+    private Label _controlsHint = null!;
     private SpinBox _sceneNumber = null!;
     private Button _importButton = null!, _openButton = null!, _bagButton = null!, _previewButton = null!;
     private CheckButton _smoothMovement = null!;
@@ -65,6 +66,7 @@ public partial class AppRoot : Control
         _smoke = args.Contains("--smoke-test");
         _eventSmoke = args.Contains("--event-smoke");
         _travelSmoke = args.Contains("--travel-smoke");
+        _battleSmoke = args.Contains("--battle-smoke");
         _world.PlayOpening = args.Contains("--play-opening");
         _smoothMovement.ButtonPressed = !args.Contains("--grid-movement");
         _smokeStarted = System.Environment.TickCount64;
@@ -169,6 +171,7 @@ public partial class AppRoot : Control
         side.AddChild(_sceneName);
         _coordinates = new Label { Text = "坐标  —  /  朝向  —", Modulate = new Color("aabcaa") };
         side.AddChild(_coordinates);
+        BuildBattleUi(side);
         side.AddChild(new HSeparator());
         side.AddChild(Caption("资源库与场景预览"));
         var numberRow = new HBoxContainer();
@@ -213,11 +216,13 @@ public partial class AppRoot : Control
         side.AddChild(_details);
         side.AddChild(new HSeparator());
         side.AddChild(new Label { Text = "场景预览会重新开始会话。", AutowrapMode = TextServer.AutowrapMode.WordSmart, Modulate = new Color("839580") });
+        RememberExplorationUi(side);
         var footer = new HBoxContainer();
         page.AddChild(footer);
         _status = new Label { Text = "选择原版 DOS 游戏目录开始。", SizeFlagsHorizontal = SizeFlags.ExpandFill, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis };
         footer.AddChild(_status);
-        footer.AddChild(new Label { Text = "WASD 行走 · E / 空格 交互 · Enter 继续 · 滚轮缩放", Modulate = new Color("8fa38d") });
+        _controlsHint = new Label { Text = "WASD 行走 · E / 空格 交互 · Enter 继续 · 滚轮缩放", Modulate = new Color("8fa38d") };
+        footer.AddChild(_controlsHint);
         _folder = new FileDialog { Access = FileDialog.AccessEnum.Filesystem, FileMode = FileDialog.FileModeEnum.OpenDir, UseNativeDialog = true, Title = "选择原版游戏目录" };
         _folder.DirSelected += async path =>
         {
@@ -245,7 +250,7 @@ public partial class AppRoot : Control
 
     private void ChooseFolder(bool package)
     {
-        if (_busy) return;
+        if (_busy || _world.Session?.Battle is not null) return;
         _openPackage = package;
         _folder.Title = package ? "选择包含 manifest.json 的资源库（兼容旧场景包）" : "选择原版 DOS 游戏资源目录";
         if (!package && Directory.Exists(_lastSource)) _folder.CurrentDir = _lastSource;
@@ -332,10 +337,12 @@ public partial class AppRoot : Control
     private void UpdateSceneInfo()
     {
         if (_world.Session is not { } session) return;
-        _sceneName.Text = session.IsWorld ? "江湖世界" : session.Scene.Name;
+        _sceneName.Text = session.Battle?.Definition.Name ?? (session.IsWorld ? "江湖世界" : session.Scene.Name);
         var player = session.Player;
         var facing = new[] { "东北", "东南", "西北", "西南" }[(int)player.Facing];
         _coordinates.Text = $"坐标  {player.Position.X}, {player.Position.Y}   /   {facing}";
+        if (session.Battle is { } battle)
+            _coordinates.Text = battle.CurrentActor is { } actor ? $"战场坐标  {actor.Position.X}, {actor.Position.Y}" : "战场 · 64 × 64";
         var location = session.IsWorld ? "世界地图 · 480 × 480" : $"场景 {session.World.CurrentSceneId:D3} · 64 × 64";
         _details.Text = $"已行走 {player.Steps} 格\n{location}\n行囊 {session.Inventory.Count} 种物品";
     }
@@ -380,6 +387,7 @@ public partial class AppRoot : Control
     public override void _Process(double delta)
     {
         _world.Advance(delta);
+        AdvanceBattleHost(delta);
         CompletePendingTravel();
         BindStory();
         if (_smoke && !_finishing) AdvanceSmoke();
@@ -435,6 +443,7 @@ public partial class AppRoot : Control
     {
         if (_world.Session is not { } session) return;
         UpdateSceneInfo();
+        _controlsHint.Text = session.Battle is not null ? "鼠标选择行动与目标 · 滚轮缩放" : "WASD 行走 · E / 空格 交互 · Enter 继续 · 滚轮缩放";
         _bagButton.Disabled = _busy || session.IsInputLocked || _package?.Story is null;
         var pending = session.Events?.Pending;
         _dialogue.Present(pending, pending is null ? null : _world.Portrait(pending.PortraitId),
@@ -450,7 +459,8 @@ public partial class AppRoot : Control
             _audio.Play();
             _playedSounds.Add(soundId);
         }
-        if (session.PendingTravel is not null) _status.Text = "正在前往下一处……";
+        if (session.Battle is not null) _status.Text = "选择行动后点击战场格子；战斗结束后按返回继续剧情。";
+        else if (session.PendingTravel is not null) _status.Text = "正在前往下一处……";
         else if (session.IsInputLocked && !session.IsEventRunning) _status.Text = "正在进入场景……";
         else if (session.IsEventRunning) _status.Text = pending?.Kind == EventPresentationKind.Choice ? "选择一项继续剧情。" : pending is null ? "……" : "空格 / Enter 继续对话";
         else if (session.InteractionMessage is { } message) _status.Text = message;
@@ -527,6 +537,7 @@ public partial class AppRoot : Control
         }
         if (_world.Session.Events?.Error is { } eventError) { _ = FinishSmokeAsync(false, eventError); return; }
         if (_travelSmoke) { AdvanceTravelSmoke(); return; }
+        if (_battleSmoke) { AdvanceBattleSmoke(); return; }
         if (_eventSmoke) { AdvanceEventSmoke(); return; }
         if (_world.Session.IsEventRunning)
         {
@@ -695,6 +706,8 @@ public partial class AppRoot : Control
             , quickTapChecks = _smokeQuickTapChecks, smoothMovement = _world.SmoothMovement, playOpening = _world.PlayOpening
             , eventChoiceChecks = _eventSmokeChoiceChecks, inventoryUseChecks = _eventSmokeInventoryChecks,
             travelChecks = _travelChecks,
+            battleChecks = _battleChecks, battleMoves = _battleMoves, battleAttacks = _battleAttacks,
+            battleOutcome = _world.Session?.LastBattleOutcome,
             variables = _world.Session?.Variables, inventory = _world.Session?.Inventory,
             eventTrace = _world.Session?.Events?.Trace
         };

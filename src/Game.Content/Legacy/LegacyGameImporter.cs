@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using JinYong.Content.Library;
 using JinYong.Content.Packages;
 using JinYong.Core.Maps;
+using JinYong.Core.Battles;
 
 namespace JinYong.Content.Legacy;
 
@@ -38,6 +39,8 @@ public sealed class LegacyGameImporter
         var hasMainMap = LegacyWorldMapImporter.LayerFiles.Any(files.ContainsKey);
         var mainMap = hasMainMap ? LegacyWorldMapImporter.Read(Read) : null;
         if (mainMap is not null) gameplay = gameplay with { TravelStart = LegacyWorldMapImporter.ReadState(ranger.Entry(0)) };
+        var hasBattles = new[] { "WAR.STA", "WARFLD.IDX", "WARFLD.GRP" }.Any(files.ContainsKey);
+        var battles = hasBattles ? LegacyBattleImporter.Read(Read, ranger) : null;
         var rawPalette = Read("MMAP.COL");
         var palette = LegacySpriteDecoder.ReadPalette(rawPalette);
         var parent = Path.GetDirectoryName(output)!;
@@ -76,6 +79,23 @@ public sealed class LegacyGameImporter
             ContentJson.Write(Path.Combine(staging, "data/sprites.json"), sprites);
             ContentJson.Write(Path.Combine(staging, "data/audio.json"), audio);
             ContentJson.Write(Path.Combine(staging, "data/source-index.json"), sources);
+            if (battles is not null)
+            {
+                ContentJson.Write(Path.Combine(staging, "data/battles.json"), new LibraryBattleDocument
+                {
+                    Battles = battles.Battles.ToArray(), BattlefieldIds = battles.Fields.Select(field => field.Id).ToArray(),
+                    Magics = battles.Magics.ToArray(), Items = battles.Items.ToArray(),
+                    Progression = LegacyProgressionImporter.Read(Read)
+                });
+                using var fieldData = File.Create(Path.Combine(staging, "data/battlefields.bin"));
+                Span<byte> word = stackalloc byte[2];
+                foreach (var field in battles.Fields)
+                foreach (var value in field.Layers)
+                {
+                    BinaryPrimitives.WriteInt16LittleEndian(word, value);
+                    fieldData.Write(word);
+                }
+            }
             File.WriteAllBytes(Path.Combine(staging, "assets/palette.rgb6"), rawPalette);
             if (mainMap is not null)
             {
@@ -89,6 +109,8 @@ public sealed class LegacyGameImporter
             {
                 DefaultScene = index.Any(scene => scene.SceneId == 70) ? 70 : index[0].SceneId,
                 MainMap = mainMap is null ? null : "data/main-map.bin",
+                Battles = battles is null ? null : "data/battles.json",
+                Battlefields = battles is null ? null : "data/battlefields.bin",
                 SourceHashes = hashes, FileHashes = fileHashes
             };
             ContentJson.Write(Path.Combine(staging, "manifest.json"), manifest);
