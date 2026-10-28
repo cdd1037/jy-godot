@@ -220,10 +220,10 @@ public sealed class GameMenuController : IDisposable
             Page.Game => new("江湖行旅", session?.IsWorld == true ? "江湖世界" : session?.Scene.Name ?? "",
                 [new("medicine", "医疗", members.Length > 0), new("detox", "解毒", members.Length > 0),
                  new("inventory", "物品"), new("status", "状态", members.Length > 0),
-                 new("leave", "离队", members.Any(id => id != 0)), new("system", "系统"), new("resume", "继续行走")]),
+                 new("leave", "离队", members.Any(id => id != 0)), new("system", "系统")]),
             Page.System => new("系统", "当前进度不会自动保存。",
-                [new("save", "保存进度", _host.Library is not null), new("load", "载入进度", _host.Library is not null),
-                 new("settings", "游戏设置"), new("title", "返回标题"), new("quit", "退出游戏"), new("back", "返回")]),
+                [new("save", "存档", _host.Library is not null), new("load", "读档", _host.Library is not null),
+                 new("settings", "设置"), new("title", "标题"), new("quit", "离开")]),
             Page.StatusPicker => new("人物状态", "选择队伍中的人物。", Roles(members)),
             Page.Status => new("人物状态", session?.Party?.Roles.GetValueOrDefault(_target)?.Name ?? "",
                 [new("back", "返回人物列表")], session is null ? "" : PartyStatusFormatter.Build(session, _target)),
@@ -243,7 +243,16 @@ public sealed class GameMenuController : IDisposable
             Page.QuitConfirm => new("退出游戏", "确定退出？未保存的进度将丢失。", ConfirmEntries("quit-confirmed")),
             _ => new GameMenuModel("江湖", "", [new("back", "返回")])
         };
-        _panel.Render(model with { Error = _message });
+        var layout = _page switch
+        {
+            Page.Title => GameMenuLayout.Title,
+            Page.Game => GameMenuLayout.Main,
+            Page.System => GameMenuLayout.System,
+            Page.StatusPicker or Page.MedicineActor or Page.MedicineTarget or Page.DetoxActor or Page.DetoxTarget or Page.LeavePicker
+                => GameMenuLayout.Party,
+            _ => GameMenuLayout.Page
+        };
+        _panel.Render(model with { Error = _message, Layout = layout });
     }
 
     public void Dispose()

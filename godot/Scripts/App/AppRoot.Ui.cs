@@ -13,6 +13,7 @@ public partial class AppRoot
     private VBoxContainer _explorationPanel = null!;
     private PanelContainer _sidePanel = null!;
     private Button _menuButton = null!;
+    private HBoxContainer _gameHeader = null!, _gameFooter = null!;
 
     private void BuildUi()
     {
@@ -30,12 +31,13 @@ public partial class AppRoot
         AddChild(background);
         var margin = new MarginContainer();
         margin.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        foreach (var edge in new[] { "left", "right", "top", "bottom" }) margin.AddThemeConstantOverride("margin_" + edge, 24);
+        foreach (var edge in new[] { "left", "right", "top", "bottom" }) margin.AddThemeConstantOverride("margin_" + edge, 0);
         AddChild(margin);
         var page = new VBoxContainer();
-        page.AddThemeConstantOverride("separation", 16);
+        page.AddThemeConstantOverride("separation", 0);
         margin.AddChild(page);
         var header = new HBoxContainer();
+        _gameHeader = header; header.Visible = false;
         page.AddChild(header);
         var title = new Label { Text = "金庸群侠传", SizeFlagsHorizontal = SizeFlags.ExpandFill };
         title.AddThemeFontSizeOverride("font_size", 30);
@@ -48,7 +50,7 @@ public partial class AppRoot
         body.AddThemeConstantOverride("separation", 20);
         page.AddChild(body);
         var mapPanel = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        mapPanel.AddThemeStyleboxOverride("panel", Box("101c1a", 12));
+        mapPanel.AddThemeStyleboxOverride("panel", new StyleBoxFlat { BgColor = new Color("101c1a") });
         body.AddChild(mapPanel);
         _world = new SceneView { Name = "WorldLayer", CustomMinimumSize = new Vector2(500, 400) };
         _viewHost = new(_world);
@@ -126,7 +128,7 @@ public partial class AppRoot
         var collision = new CheckButton { Text = "显示碰撞辅助", FocusMode = FocusModeEnum.None };
         collision.Toggled += value => { _world.ShowCollision = value; _world.QueueRedraw(); };
         _explorationPanel.AddChild(collision);
-        _smoothMovement = new CheckButton { Text = "平滑移动（F2）", ButtonPressed = true, FocusMode = FocusModeEnum.None };
+        _smoothMovement = new CheckButton { Text = "平滑移动（F2）", ButtonPressed = false, FocusMode = FocusModeEnum.None };
         _smoothMovement.Toggled += value => _menuController.SetPreferences(_menuController.Preferences with { SmoothMovement = value });
         _explorationPanel.AddChild(_smoothMovement);
         _explorationPanel.AddChild(new Control { SizeFlagsVertical = SizeFlags.ExpandFill });
@@ -135,6 +137,7 @@ public partial class AppRoot
         _explorationPanel.AddChild(new HSeparator());
         _explorationPanel.AddChild(new Label { Text = "场景预览会重新开始会话。", AutowrapMode = TextServer.AutowrapMode.WordSmart, Modulate = new Color("839580") });
         var footer = new HBoxContainer();
+        _gameFooter = footer; footer.Visible = false;
         page.AddChild(footer);
         _status = new Label { Text = "选择原版 DOS 游戏目录开始。", SizeFlagsHorizontal = SizeFlags.ExpandFill, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis };
         footer.AddChild(_status);

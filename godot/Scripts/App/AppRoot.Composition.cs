@@ -18,9 +18,10 @@ public partial class AppRoot
         var inventory = new InventoryPanel();
         AddChild(inventory);
         _inventoryController = new(_viewHost, inventory);
-        var menu = new GameMenuPanel();
+        var menu = new GameMenuPanel { LayoutTarget = _world };
         AddChild(menu);
         _menuController = new(_viewHost, menu);
+        _world.MenuRequested += () => _menuController.OpenGameMenu();
         _menuController.InputAcknowledged += AcknowledgeMenuInput;
         _inventoryController.InputAcknowledged += AcknowledgeMenuInput;
         _inventoryController.Closed += () => _menuController.ResumeFromChild();

@@ -2,13 +2,13 @@ using Godot;
 
 namespace JinYong.Host;
 
-public sealed record GamePreferences(bool SmoothMovement = true, bool MusicEnabled = true)
+public sealed record GamePreferences(bool SmoothMovement = false, bool MusicEnabled = true)
 {
     public static GamePreferences Load()
     {
         using var file = new ConfigFile();
         if (file.Load("user://settings.cfg") != Error.Ok) return new();
-        return new(file.GetValue("game", "smooth_movement", true).AsBool(),
+        return new(file.GetValue("game", "smooth_movement", false).AsBool(),
             file.GetValue("audio", "music_enabled", true).AsBool());
     }
 

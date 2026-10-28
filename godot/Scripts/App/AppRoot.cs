@@ -33,6 +33,8 @@ public partial class AppRoot : Control
         PresentLifecycleMenu();
         BindStory();
         _sidePanel.Visible = _debugVisible || _world.Session?.Battle is not null;
+        _gameHeader.Visible = _debugVisible;
+        _gameFooter.Visible = _debugVisible || _busy;
         _explorationPanel.Visible = _debugVisible && _world.Session?.Battle is null;
         _menuButton.Disabled = _busy || _menuController.BlocksSimulation || _inventoryController.IsOpen || SaveMenuVisible ||
             _world.Session?.CanSave != true || _world.IsMoving;

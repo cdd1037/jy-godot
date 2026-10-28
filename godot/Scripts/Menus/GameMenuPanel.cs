@@ -9,6 +9,9 @@ public partial class GameMenuPanel : Control
     private VBoxContainer _entries = null!;
     private ScrollContainer _scroll = null!;
     private Button _back = null!;
+    private Control _canvas = null!;
+    private PanelContainer _card = null!, _mainBackdrop = null!;
+    public Control? LayoutTarget { get; set; }
     private readonly List<Button> _rows = [];
     private GameMenuModel? _model;
     private bool _built;
@@ -31,8 +34,12 @@ public partial class GameMenuPanel : Control
 
     public override void _Ready() => EnsureUi();
 
+    public override void _Process(double delta) { if (IsOpen) UpdateLayout(); }
+
     public override void _GuiInput(InputEvent input)
     {
+        if (input is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Right })
+        { RequestBack(); AcceptEvent(); return; }
         if (HandleKeyInput(input)) AcceptEvent();
     }
 
@@ -42,7 +49,9 @@ public partial class GameMenuPanel : Control
         ArgumentNullException.ThrowIfNull(model.Entries);
         EnsureUi();
         var wasOpen = IsOpen;
-        var samePage = _model?.Title == model.Title;
+        var samePage = _model?.Title == model.Title && _model?.Layout == model.Layout;
+        var compact = model.Layout is GameMenuLayout.Main or GameMenuLayout.System or GameMenuLayout.Party;
+        if (compact) model = model with { Entries = model.Entries.Where(entry => entry.Id != "back").ToArray() };
         var previousId = samePage && SelectedIndex >= 0 && SelectedIndex < (_model?.Entries.Count ?? 0)
             ? _model!.Entries[SelectedIndex].Id : null;
         // Freeze the page's list so a caller cannot change a queued button's meaning.
@@ -56,8 +65,9 @@ public partial class GameMenuPanel : Control
         }
         _rows.Clear();
         _title.Text = model.Title;
+        _title.Visible = !compact;
         _subtitle.Text = model.Subtitle;
-        _subtitle.Visible = !string.IsNullOrEmpty(model.Subtitle);
+        _subtitle.Visible = !compact && !string.IsNullOrEmpty(model.Subtitle);
         _body.Text = model.Body;
         _body.Visible = !string.IsNullOrEmpty(model.Body);
         _error.Text = model.Error ?? "";
@@ -68,10 +78,11 @@ public partial class GameMenuPanel : Control
             {
                 Name = $"MenuEntry{index}", Text = entry.Text, Disabled = !entry.Enabled,
                 Alignment = HorizontalAlignment.Left, ToggleMode = true,
-                FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(660, 42),
+                FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 20),
                 TooltipText = entry.Hint ?? ""
             };
-            row.AddThemeFontSizeOverride("font_size", 22);
+            row.AddThemeFontSizeOverride("font_size", compact ? 14 : 12);
+            StyleRow(row);
             row.Pressed += () =>
             {
                 if (!IsOpen || generation != _generation) return;
@@ -96,6 +107,7 @@ public partial class GameMenuPanel : Control
             _openedFrame = Engine.GetProcessFrames();
         }
         if (!wasOpen || !samePage) _scroll.ScrollVertical = 0;
+        UpdateLayout();
         // A text editor outside the modal must not keep receiving Enter/Escape.
         if (IsInsideTree()) GrabFocus();
     }
@@ -150,7 +162,12 @@ public partial class GameMenuPanel : Control
     {
         if (_model is null) return;
         SelectedIndex = index >= 0 && index < _model.Entries.Count && _model.Entries[index].Enabled ? index : -1;
-        for (var row = 0; row < _rows.Count; row++) _rows[row].SetPressedNoSignal(row == SelectedIndex);
+        for (var row = 0; row < _rows.Count; row++)
+        {
+            _rows[row].SetPressedNoSignal(row == SelectedIndex);
+            _rows[row].AddThemeColorOverride("font_color", row == SelectedIndex ? new Color("eeeeee") : new Color("eea050"));
+            _rows[row].AddThemeColorOverride("font_pressed_color", new Color("eeeeee"));
+        }
         _hint.Text = SelectedIndex >= 0 ? _model.Entries[SelectedIndex].Hint ?? "" : "";
     }
 
@@ -176,70 +193,86 @@ public partial class GameMenuPanel : Control
         return true;
     }
 
+    private static StyleBoxFlat PanelStyle()
+    {
+        var box = new StyleBoxFlat
+        {
+            BgColor = new Color(0.075f, 0.08f, 0.075f, 0.87f), BorderColor = new Color("c8c8c0"),
+            ContentMarginLeft = 4, ContentMarginRight = 4, ContentMarginTop = 5, ContentMarginBottom = 5
+        };
+        box.SetBorderWidthAll(1);
+        return box;
+    }
+
+    private static void StyleRow(Button button)
+    {
+        foreach (var state in new[] { "normal", "hover", "pressed", "disabled", "focus", "hover_pressed" })
+            button.AddThemeStyleboxOverride(state, new StyleBoxEmpty());
+        button.AddThemeColorOverride("font_color", new Color("eea050"));
+        button.AddThemeColorOverride("font_hover_color", new Color("ffffff"));
+        button.AddThemeColorOverride("font_disabled_color", new Color("777770"));
+        button.AddThemeColorOverride("font_shadow_color", Colors.Black);
+        button.AddThemeConstantOverride("shadow_offset_x", 1);
+        button.AddThemeConstantOverride("shadow_offset_y", 1);
+    }
+
+    private void UpdateLayout()
+    {
+        if (_model is null) return;
+        var rect = LayoutTarget?.GetGlobalRect() ?? GetGlobalRect();
+        var factor = Math.Max(0.5f, Math.Min(rect.Size.X / 320f, rect.Size.Y / 200f));
+        _canvas.Scale = new Vector2(factor, factor);
+        _canvas.Position = rect.Position - GlobalPosition + (rect.Size - new Vector2(320, 200) * factor) / 2;
+        var compact = _model.Layout is GameMenuLayout.Main or GameMenuLayout.System or GameMenuLayout.Party;
+        var box = _model.Layout switch
+        {
+            GameMenuLayout.Main => new Rect2(20, 18, 42, 12 + 20 * _rows.Count),
+            GameMenuLayout.System => new Rect2(70, 18, 42, 12 + 20 * _rows.Count),
+            GameMenuLayout.Party => new Rect2(68, 18, 92, Math.Max(32, 12 + 20 * _rows.Count)),
+            GameMenuLayout.Title => new Rect2(40, 4, 240, 190),
+            _ => new Rect2(56, 18, 208, 166)
+        };
+        _card.Position = box.Position;
+        _card.Size = box.Size;
+        _scroll.CustomMinimumSize = compact ? new Vector2(box.Size.X - 8, 20 * _rows.Count) : new Vector2(0, 30);
+        _mainBackdrop.Visible = _model.Layout == GameMenuLayout.System;
+        _back.Visible = !compact && _model.Layout != GameMenuLayout.Title;
+        // Supplementary prompts float outside compact DOS-style lists.
+        _hint.Position = new Vector2(8, 184);
+        _hint.Size = new Vector2(304, 14);
+    }
+
     private void EnsureUi()
     {
         if (_built) return;
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        var veil = new ColorRect { Color = new Color(0.025f, 0.055f, 0.04f, 0.94f), MouseFilter = MouseFilterEnum.Stop };
-        veil.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        AddChild(veil);
-        var center = new CenterContainer { MouseFilter = MouseFilterEnum.Ignore };
-        center.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        AddChild(center);
-        var card = new PanelContainer { CustomMinimumSize = new Vector2(720, 0) };
-        var style = new StyleBoxFlat
+        _canvas = new Control { Size = new Vector2(320, 200), MouseFilter = MouseFilterEnum.Ignore };
+        AddChild(_canvas);
+        _mainBackdrop = new PanelContainer { Position = new Vector2(20, 18), Size = new Vector2(42, 132), MouseFilter = MouseFilterEnum.Ignore };
+        _mainBackdrop.AddThemeStyleboxOverride("panel", PanelStyle());
+        _canvas.AddChild(_mainBackdrop);
+        var mainRows = new VBoxContainer { MouseFilter = MouseFilterEnum.Ignore };
+        mainRows.AddThemeConstantOverride("separation", 0); _mainBackdrop.AddChild(mainRows);
+        foreach (var text in new[] { "医疗", "解毒", "物品", "状态", "离队", "系统" })
         {
-            BgColor = new Color("14251f"), BorderColor = new Color("927844"),
-            ContentMarginLeft = 28, ContentMarginRight = 28, ContentMarginTop = 22, ContentMarginBottom = 20
-        };
-        style.SetBorderWidthAll(1);
-        style.SetCornerRadiusAll(6);
-        card.AddThemeStyleboxOverride("panel", style);
-        center.AddChild(card);
-        var column = new VBoxContainer();
-        column.AddThemeConstantOverride("separation", 12);
-        card.AddChild(column);
-        _title = new Label();
-        _title.AddThemeFontSizeOverride("font_size", 38);
-        _title.AddThemeColorOverride("font_color", new Color("d9bd79"));
-        column.AddChild(_title);
-        _subtitle = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(660, 0) };
-        _subtitle.AddThemeColorOverride("font_color", new Color("a3b5a6"));
-        column.AddChild(_subtitle);
-        column.AddChild(new HSeparator());
-        _scroll = new ScrollContainer
-        {
-            CustomMinimumSize = new Vector2(660, 330), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled,
-            FocusMode = FocusModeEnum.None
-        };
+            var label = new Label { Text = text, CustomMinimumSize = new Vector2(0, 20), MouseFilter = MouseFilterEnum.Ignore };
+            label.AddThemeFontSizeOverride("font_size", 14);
+            label.AddThemeColorOverride("font_color", new Color(text == "系统" ? "eeeeee" : "eea050"));
+            mainRows.AddChild(label);
+        }
+        _card = new PanelContainer();
+        _card.AddThemeStyleboxOverride("panel", PanelStyle()); _canvas.AddChild(_card);
+        var column = new VBoxContainer(); column.AddThemeConstantOverride("separation", 0); _card.AddChild(column);
+        _title = new Label(); _title.AddThemeFontSizeOverride("font_size", 20); _title.AddThemeColorOverride("font_color", new Color("eea050")); column.AddChild(_title);
+        _subtitle = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart }; _subtitle.AddThemeFontSizeOverride("font_size", 9); column.AddChild(_subtitle);
+        _scroll = new ScrollContainer { HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled, FocusMode = FocusModeEnum.None, SizeFlagsVertical = SizeFlags.ExpandFill };
         column.AddChild(_scroll);
-        var content = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        content.AddThemeConstantOverride("separation", 16);
-        _scroll.AddChild(content);
-        _body = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, CustomMinimumSize = new Vector2(640, 0) };
-        _body.AddThemeColorOverride("font_color", new Color("dfdbc8"));
-        content.AddChild(_body);
-        _entries = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        _entries.AddThemeConstantOverride("separation", 7);
-        content.AddChild(_entries);
-        _hint = new Label
-        {
-            AutowrapMode = TextServer.AutowrapMode.WordSmart,
-            CustomMinimumSize = new Vector2(660, 25), Modulate = new Color("b9bda7")
-        };
-        column.AddChild(_hint);
-        _error = new Label
-        {
-            AutowrapMode = TextServer.AutowrapMode.WordSmart,
-            CustomMinimumSize = new Vector2(660, 0), Modulate = new Color("e5ab8b")
-        };
-        column.AddChild(_error);
-        var footer = new HBoxContainer();
-        column.AddChild(footer);
-        footer.AddChild(new Label { Text = "↑↓ / W、S 选择    Enter / 空格 确认", SizeFlagsHorizontal = SizeFlags.ExpandFill, Modulate = new Color("a3b5a6") });
-        _back = new Button { Text = "返回 · Esc", FocusMode = FocusModeEnum.None };
-        _back.Pressed += RequestBack;
-        footer.AddChild(_back);
+        var content = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill }; content.AddThemeConstantOverride("separation", 0); _scroll.AddChild(content);
+        _body = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart }; _body.AddThemeFontSizeOverride("font_size", 10); content.AddChild(_body);
+        _entries = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill }; _entries.AddThemeConstantOverride("separation", 0); content.AddChild(_entries);
+        _error = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart }; _error.AddThemeFontSizeOverride("font_size", 9); _error.AddThemeColorOverride("font_color", new Color("efb0a0")); column.AddChild(_error);
+        _back = new Button { Text = "返回 · Esc / 右键", FocusMode = FocusModeEnum.None }; _back.AddThemeFontSizeOverride("font_size", 9); StyleRow(_back); _back.Pressed += RequestBack; column.AddChild(_back);
+        _hint = new Label { Text = "", MouseFilter = MouseFilterEnum.Ignore, AutowrapMode = TextServer.AutowrapMode.WordSmart }; _hint.AddThemeFontSizeOverride("font_size", 8); _canvas.AddChild(_hint);
         _built = true;
     }
 }

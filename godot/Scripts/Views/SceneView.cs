@@ -11,9 +11,10 @@ public partial class SceneView : Control
     private float _zoom = 2;
 
     public event Action<MovementResult>? MovementAttempted;
+    public event Action? MenuRequested;
     public bool IsMoving => _walker?.IsMoving == true;
     public bool ShowCollision { get; set; }
-    public bool SmoothMovement { get; set; } = true;
+    public bool SmoothMovement { get; set; }
     public bool PlayOpening { get; set; }
     public float Zoom => _zoom;
     public GameSession? Session => _session;
@@ -54,6 +55,8 @@ public partial class SceneView : Control
 
     public override void _GuiInput(InputEvent input)
     {
+        if (input is InputEventMouseButton { Pressed: true, ButtonIndex: MouseButton.Right } && _session?.CanSave == true && !IsMoving)
+        { MenuRequested?.Invoke(); AcceptEvent(); return; }
         if (TryHandleBattleHover(input)) { AcceptEvent(); return; }
         if (TryHandleBattleClick(input)) { AcceptEvent(); return; }
         if (input is not InputEventMouseButton { Pressed: true } mouse) return;
