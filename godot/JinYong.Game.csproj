@@ -1,0 +1,12 @@
+<Project Sdk="Godot.NET.Sdk/4.7.2">
+  <PropertyGroup>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <RootNamespace>JinYong.Host</RootNamespace>
+    <AssemblyName>JinYong.Game</AssemblyName>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../src/Game.Content/Game.Content.csproj" />
+    <ProjectReference Include="../src/Game.Core/Game.Core.csproj" />
+  </ItemGroup>
+</Project>

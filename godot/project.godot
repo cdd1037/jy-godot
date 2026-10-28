@@ -1,0 +1,27 @@
+; Godot .NET host. Game rules live in the separate Game.Core project.
+config_version=5
+
+[application]
+config/name="金庸群侠传 · 重制"
+run/main_scene="res://Scenes/AppRoot.tscn"
+config/features=PackedStringArray("4.7", "C#", "GL Compatibility")
+config/description="Godot .NET remake — original scene exploration"
+
+[display]
+window/size/viewport_width=1280
+window/size/viewport_height=800
+window/size/window_width_override=1280
+window/size/window_height_override=800
+window/size/min_width=1000
+window/size/min_height=640
+window/stretch/mode="canvas_items"
+
+[dotnet]
+project/assembly_name="JinYong.Game"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+textures/default_filters/use_nearest_mipmap_filter=false
+textures/canvas_textures/default_texture_filter=0
+environment/defaults/default_clear_color=Color(0.055, 0.075, 0.075, 1)

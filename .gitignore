@@ -1,0 +1,16 @@
+.godot/
+**/bin/
+**/obj/
+.local/
+/content/base/
+/content/imported/
+/artifacts/
+**/TestResults/
+.vs/
+.idea/
+*.user
+*.suo
+*.csproj.old
+*.log
+*.trx
+*.tmp

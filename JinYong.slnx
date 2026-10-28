@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Game.Core/Game.Core.csproj" />
+    <Project Path="src/Game.Content/Game.Content.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Game.Tools/Game.Tools.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Game.Tests/Game.Tests.csproj" />
+  </Folder>
+  <Project Path="godot/JinYong.Game.csproj" />
+</Solution>

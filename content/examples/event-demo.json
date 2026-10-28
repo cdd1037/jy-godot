@@ -1,0 +1,65 @@
+{
+  "format_version": 1,
+  "scene_id": 70,
+  "initial_program_id": 10000,
+  "initial_facing": "right",
+  "variable_names": { "0": "example:quest/progress" },
+  "item_names": { "9000": "测试信物" },
+  "programs": [
+    { "id": 10000, "commands": [
+      { "id": 0, "operation": "call", "arguments": [691] },
+      { "id": 1, "operation": "change_event", "arguments": [-2, 1, 1, -2, 10001, 10002, -1, 6888, 6888, 6888, -2, 20, 20] },
+      { "id": 2, "operation": "face", "arguments": [1] },
+      { "id": 3, "operation": "end", "arguments": [] }
+    ] },
+    { "id": 10001, "commands": [
+      { "id": 0, "operation": "branch_variable", "arguments": [0, 0, 2, 90, 1] },
+      { "id": 1, "operation": "branch_variable", "arguments": [0, 0, 1, 60, 10] },
+      { "id": 10, "operation": "choice", "arguments": [80], "text": "帮我完成一个小任务，好吗？", "choices": [
+        { "text": "接下任务", "target": 20 }, { "text": "稍后再说", "target": 80 }
+      ] },
+      { "id": 20, "operation": "set_variable", "arguments": [0, 1] },
+      { "id": 21, "operation": "call", "arguments": [10003] },
+      { "id": 22, "operation": "dialogue", "arguments": [10000, 114, 0] },
+      { "id": 23, "operation": "end", "arguments": [] },
+      { "id": 60, "operation": "dialogue", "arguments": [10004, 114, 0] },
+      { "id": 61, "operation": "end", "arguments": [] },
+      { "id": 80, "operation": "dialogue", "arguments": [10001, 114, 0] },
+      { "id": 81, "operation": "end", "arguments": [] },
+      { "id": 90, "operation": "dialogue", "arguments": [10002, 114, 0] },
+      { "id": 91, "operation": "end", "arguments": [] }
+    ] },
+    { "id": 10002, "commands": [
+      { "id": 0, "operation": "branch_used_item", "arguments": [9000, 10, 80] },
+      { "id": 10, "operation": "branch_variable", "arguments": [0, 0, 1, 20, 70] },
+      { "id": 20, "operation": "branch_item", "arguments": [9000, 1, 30, 70] },
+      { "id": 30, "operation": "adjust_item", "arguments": [9000, -1] },
+      { "id": 31, "operation": "wait", "arguments": [150] },
+      { "id": 32, "operation": "set_variable", "arguments": [0, 2] },
+      { "id": 33, "operation": "call", "arguments": [10004] },
+      { "id": 34, "operation": "dialogue", "arguments": [10003, 114, 0] },
+      { "id": 35, "operation": "end", "arguments": [] },
+      { "id": 70, "operation": "dialogue", "arguments": [10004, 114, 0] },
+      { "id": 71, "operation": "end", "arguments": [] },
+      { "id": 80, "operation": "dialogue", "arguments": [10005, 114, 0] },
+      { "id": 81, "operation": "end", "arguments": [] }
+    ] },
+    { "id": 10003, "commands": [
+      { "id": 0, "operation": "add_item", "arguments": [9000, 1] },
+      { "id": 1, "operation": "return", "arguments": [] }
+    ] },
+    { "id": 10004, "commands": [
+      { "id": 0, "operation": "add_item", "arguments": [174, 100] },
+      { "id": 1, "operation": "set_tile", "arguments": [-2, 1, 21, 20, 0] },
+      { "id": 2, "operation": "return", "arguments": [] }
+    ] }
+  ],
+  "dialogues": [
+    { "id": 10000, "pages": ["这是测试信物。面向我打开行囊，\n选中信物并使用，就能完成任务。"] },
+    { "id": 10001, "pages": ["没关系，准备好了再来找我。"] },
+    { "id": 10002, "pages": ["任务已经完成，奖励只领取一次。"] },
+    { "id": 10003, "pages": ["收到信物，任务完成！\n这是一百两银子，请收好。"] },
+    { "id": 10004, "pages": ["接下任务后，请在行囊中使用测试信物。"] },
+    { "id": 10005, "pages": ["这件物品不对，我需要测试信物。"] }
+  ]
+}
