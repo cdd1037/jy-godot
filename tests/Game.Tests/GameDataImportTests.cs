@@ -28,14 +28,14 @@ public sealed class GameDataImportTests
     public void ActualGlobalCatalogClassifiesEveryScriptAndValidatesAllReferencesTogether()
     {
         var data = Original.Value;
-        Assert.AreEqual(868, data.Programs.Length);
-        Assert.AreEqual(150, data.UnavailablePrograms.Count);
+        Assert.AreEqual(882, data.Programs.Length);
+        Assert.AreEqual(136, data.UnavailablePrograms.Count);
         CollectionAssert.AreEquivalent(Enumerable.Range(0, 1018).ToArray(),
             data.Programs.Select(program => program.Id).Concat(data.UnavailablePrograms.Keys).ToArray());
         Assert.AreEqual(320, data.Party!.Roles.Count); Assert.AreEqual(200, data.ItemNames.Count);
         Assert.IsTrue(data.UnavailablePrograms.Values.All(reason => !string.IsNullOrWhiteSpace(reason)));
         var catalog = data.ToStoryCatalog(70, 691, 0, 6890, Direction.Right);
-        Assert.AreEqual(691, catalog.InitialProgramId); Assert.AreEqual(868, catalog.Programs.Count);
+        Assert.AreEqual(691, catalog.InitialProgramId); Assert.AreEqual(882, catalog.Programs.Count);
         Assert.IsNull(catalog.World);
         var referenced = data.Programs.SelectMany(program => program.Commands).SelectMany(command => command.Operation switch
         {

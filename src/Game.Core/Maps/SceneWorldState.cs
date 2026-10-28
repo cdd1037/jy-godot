@@ -100,7 +100,15 @@ public sealed class SceneWorldState
         if (definition?.HasScene(currentSceneId) != true) _metadata.Add(currentSceneId, new short[26]);
     }
 
-    public int CurrentSceneId { get; }
+    public int CurrentSceneId { get; private set; }
+    public bool HasLegacyMetadata(int sceneId) => _definition?.HasScene(Resolve(sceneId)) == true &&
+        _definition.Scene(Resolve(sceneId)).HasLegacyMetadata;
+    public SceneRuntimeState ActivateScene(int sceneId)
+    {
+        var scene = Scene(sceneId);
+        CurrentSceneId = Resolve(sceneId);
+        return scene;
+    }
     public IReadOnlyList<int> SceneIds => (_definition?.Scenes.Select(scene => scene.SceneId) ?? [])
         .Append(CurrentSceneId).Distinct().Order().ToArray();
     public bool HasScene(int sceneId) => _scenes.ContainsKey(Resolve(sceneId)) || _definition?.HasScene(Resolve(sceneId)) == true;

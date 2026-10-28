@@ -64,6 +64,7 @@ public partial class AppRoot : Control
         }
         _smoke = args.Contains("--smoke-test");
         _eventSmoke = args.Contains("--event-smoke");
+        _travelSmoke = args.Contains("--travel-smoke");
         _world.PlayOpening = args.Contains("--play-opening");
         _smoothMovement.ButtonPressed = !args.Contains("--grid-movement");
         _smokeStarted = System.Environment.TickCount64;
@@ -189,7 +190,13 @@ public partial class AppRoot : Control
         restart.Pressed += () =>
         {
             if (_package is null || _busy) return;
-            ShowScene(_package);
+            try
+            {
+                var id = _world.Session!.World.CurrentSceneId;
+                ShowScene(_package.Library is { } library
+                    ? library.OpenScene(id, overlay: _storyOverlay?.SceneId == id ? _storyOverlay : null) : _package);
+            }
+            catch (Exception error) { _ = ShowFailureAsync(error); }
         };
         side.AddChild(restart);
         _bagButton = new Button { Text = "查看背包", CustomMinimumSize = new Vector2(0, 34), FocusMode = FocusModeEnum.None };
@@ -325,11 +332,12 @@ public partial class AppRoot : Control
     private void UpdateSceneInfo()
     {
         if (_world.Session is not { } session) return;
-        _sceneName.Text = session.Scene.Name;
+        _sceneName.Text = session.IsWorld ? "江湖世界" : session.Scene.Name;
         var player = session.Player;
         var facing = new[] { "东北", "东南", "西北", "西南" }[(int)player.Facing];
         _coordinates.Text = $"坐标  {player.Position.X}, {player.Position.Y}   /   {facing}";
-        _details.Text = $"已行走 {player.Steps} 格\n场景 {(_package?.Document.LegacySceneId ?? 0):D3} · 64 × 64\n行囊 {session.Inventory.Count} 种物品";
+        var location = session.IsWorld ? "世界地图 · 480 × 480" : $"场景 {session.World.CurrentSceneId:D3} · 64 × 64";
+        _details.Text = $"已行走 {player.Steps} 格\n{location}\n行囊 {session.Inventory.Count} 种物品";
     }
 
     private static string ActionName(Direction direction) => "walk_" + direction.ToString().ToLowerInvariant();
@@ -372,6 +380,7 @@ public partial class AppRoot : Control
     public override void _Process(double delta)
     {
         _world.Advance(delta);
+        CompletePendingTravel();
         BindStory();
         if (_smoke && !_finishing) AdvanceSmoke();
         _heldDirections.RemoveAll(direction => !Input.IsActionPressed(ActionName(direction)));
@@ -394,6 +403,7 @@ public partial class AppRoot : Control
                 }
                 else if (Input.IsActionJustPressed("interact") && _dialogue.Token is { } token) ConfirmDialogue(token);
             }
+            else if (_world.Session?.IsInputLocked == true) canWalk = false;
             else if (!_world.IsMoving && Input.IsActionJustPressed("interact"))
             {
                 canWalk = false;
@@ -425,7 +435,7 @@ public partial class AppRoot : Control
     {
         if (_world.Session is not { } session) return;
         UpdateSceneInfo();
-        _bagButton.Disabled = _busy || session.IsEventRunning || _package?.Story is null;
+        _bagButton.Disabled = _busy || session.IsInputLocked || _package?.Story is null;
         var pending = session.Events?.Pending;
         _dialogue.Present(pending, pending is null ? null : _world.Portrait(pending.PortraitId),
             pending is null ? null : _package?.Document.PortraitNames.GetValueOrDefault(pending.PortraitId));
@@ -440,8 +450,11 @@ public partial class AppRoot : Control
             _audio.Play();
             _playedSounds.Add(soundId);
         }
-        if (session.IsEventRunning) _status.Text = pending?.Kind == EventPresentationKind.Choice ? "选择一项继续剧情。" : pending is null ? "……" : "空格 / Enter 继续对话";
+        if (session.PendingTravel is not null) _status.Text = "正在前往下一处……";
+        else if (session.IsInputLocked && !session.IsEventRunning) _status.Text = "正在进入场景……";
+        else if (session.IsEventRunning) _status.Text = pending?.Kind == EventPresentationKind.Choice ? "选择一项继续剧情。" : pending is null ? "……" : "空格 / Enter 继续对话";
         else if (session.InteractionMessage is { } message) _status.Text = message;
+        else if (session.IsWorld) _status.Text = "方向键 / WASD 行走，走向入口进入场景。";
         else if (session.Events?.CompletedCount > 0) _status.Text = "面向人物或箱子，按 E / 空格交互。";
     }
 
@@ -458,7 +471,7 @@ public partial class AppRoot : Control
 
     private void ShowInventory()
     {
-        if (_world.Session is not { } session || session.IsEventRunning || _package?.Story is not { } story || _inventoryDialog is not null) return;
+        if (_world.Session is not { } session || session.IsInputLocked || _package?.Story is not { } story || _inventoryDialog is not null) return;
         var dialog = new AcceptDialog
         {
             Title = "行囊"
@@ -479,7 +492,7 @@ public partial class AppRoot : Control
         foreach (var pair in entries) items.AddItem($"{story.ItemNames.GetValueOrDefault(pair.Key, $"物品 {pair.Key}")}  × {pair.Value}");
         column.AddChild(items);
         var use = new Button { Name = "UseItem", Text = "对面前的物件使用", Disabled = true };
-        items.ItemSelected += _ => use.Disabled = false;
+        items.ItemSelected += _ => use.Disabled = session.IsWorld;
         use.Pressed += () =>
         {
             if (_inventoryDialog != dialog) return;
@@ -513,6 +526,7 @@ public partial class AppRoot : Control
             return;
         }
         if (_world.Session.Events?.Error is { } eventError) { _ = FinishSmokeAsync(false, eventError); return; }
+        if (_travelSmoke) { AdvanceTravelSmoke(); return; }
         if (_eventSmoke) { AdvanceEventSmoke(); return; }
         if (_world.Session.IsEventRunning)
         {
@@ -680,6 +694,7 @@ public partial class AppRoot : Control
             playedSounds = _playedSounds, openingTrigger = _world.Session?.Scene.Events[0][4]
             , quickTapChecks = _smokeQuickTapChecks, smoothMovement = _world.SmoothMovement, playOpening = _world.PlayOpening
             , eventChoiceChecks = _eventSmokeChoiceChecks, inventoryUseChecks = _eventSmokeInventoryChecks,
+            travelChecks = _travelChecks,
             variables = _world.Session?.Variables, inventory = _world.Session?.Inventory,
             eventTrace = _world.Session?.Events?.Trace
         };

@@ -12,6 +12,7 @@ content/base/
 │   ├── scene-index.json    场景索引与原始场景元数据
 │   ├── world.layers.bin    集中保存所有场景的地图层
 │   ├── world.events.bin    集中保存所有场景的事件记录
+│   ├── main-map.bin        世界地图五层 480×480 原始编号
 │   ├── sprites.json        资源 bank / 原始 ID 到共享图片资产的映射
 │   ├── audio.json          事件音效、攻击音效与音乐资源索引
 │   └── source-index.json   原始文件名到哈希、大小、存储路径与种类
@@ -25,21 +26,21 @@ content/base/
 
 ## 公共定义与场景视图
 
-`data/gameplay.json` 集中保存角色定义、初始队伍和背包，以及全局脚本与对白。`GameLibrary.OpenScene` 创建引用公共定义的内存场景视图，不重新复制或导出整套人物、对白和资源文件。库定义与 `GameSession` 的可变状态分开，开箱、队伍变化、事件修改和地图修改由会话保存。界面切换预览会新建会话，不是保留进度的游戏内切图。
+`data/gameplay.json` 集中保存角色定义、初始队伍和背包、世界旅行初始状态，以及全局脚本与对白。`GameLibrary.OpenScene` / `OpenWorldView` 创建内存视图，不重新复制或导出公共内容。库定义与 `GameSession` 的可变状态分开，开箱、队伍变化、事件修改和地图修改由同一会话保存。正常场景出口与世界入口切换保留会话；界面切换预览会另建会话。
 
 原版地图归档具有 100 个地图及事件记录，而 RANGER 只有 84 条场景元数据。两者分别保留，不通过臆造名称、入口或元数据把数量补齐。`data/scene-index.json` 表达实际可用的元数据与地图记录关系，84–99 记录保留零占位元数据及 `has_legacy_metadata=false`。缺少图像 bank 时 `OpenScene` 明确拒绝可行走预览。
 
-`data/world.layers.bin` 与 `data/world.events.bin` 各只有一份，按连续场景编号排列。每场景地图为六层 64×64 的小端 int16，共 49152 字节；事件为 200×11 个小端 int16，共 4400 字节。场景索引负责定位对应记录，不产生 100 套公共内容副本。跨场景事件修改由世界状态处理，游戏内场景出口和切换流程尚未实现。
+`data/world.layers.bin` 与 `data/world.events.bin` 各只有一份，按连续场景编号排列。每场景地图为六层 64×64 的小端 int16，共 49152 字节；事件为 200×11 个小端 int16，共 4400 字节。场景索引负责定位对应记录。`main-map.bin` 按 Earth、Surface、Building、BuildX、BuildY 保存五层 480×480 小端 int16，共 2304000 字节；后两层保留建筑拥有者坐标，前三层保留图片编号。
 
 ## 图片与来源资源
 
-不同资源 bank 中相同的原始图片编号不必代表相同图片，因此图片引用包含 bank 身份。`data/sprites.json` 用 `banks[bank][localID]` 得到资产 ID，再从 `assets[assetID]` 定位共享图集。场景 bank 使用 `scene/000` 等名称，保留双倍原始图片编号；头像 bank 使用 `portrait`，其编号规则独立。
+不同资源 bank 中相同的原始图片编号不必代表相同图片，因此图片引用包含 bank 身份。`data/sprites.json` 用 `banks[bank][localID]` 得到资产 ID，再从 `assets[assetID]` 定位共享图集。场景 bank 使用 `scene/000` 等名称，世界地图使用 `world`，两者保留双倍原始图片编号；头像 bank 使用 `portrait`，其编号规则独立。世界与场景图像经过同一次共享图集打包，不创建第二套资源目录。
 
 原版 84 个场景 bank 的主角 28 帧，编号与字节内容已确认全部相同；仍保留每个 bank 的原始映射，共享由内容去重决定。哈希包括尺寸、锚点、索引及覆盖平面，而不是按 localID 跨 bank 直接合并。游戏层不依赖图集页数或打包顺序。
 
 来源缓存保留后续解码所需的白名单游戏资源。`data/source-index.json` 以原始文件名为键，记录 `sha256`、`size`、`storage`、`kind`，存储路径指向 `assets/source/` 中按哈希寻址的内容。音效后缀为 `.wav`，音乐为 `.xmi`，其他数据为 `.bin`。原始编号、来源文件名与存储文件分离，不因内容去重丢失映射。
 
-`data/audio.json` 的 `effects`、`attacks`、`music` 分别索引 E 系列音效、攻击音效与 GAME 系列 XMI。当前接通事件 WAV 播放；音乐与攻击音效缓存不代表已经接通音乐播放或战斗。库内也保留白名单字体、世界地图、战斗和标题等原始资源，等待对应功能后续解码与使用。
+`data/audio.json` 的 `effects`、`attacks`、`music` 分别索引 E 系列音效、攻击音效与 GAME 系列 XMI。当前接通事件 WAV 播放；音乐与攻击音效缓存不代表已经接通音乐播放或战斗。库内也保留白名单字体、战斗和标题等原始资源，等待对应功能后续解码与使用。
 
 缓存只能接纳导入器明确列出的游戏数据格式；不递归复制原版目录，不缓存 DOS 可执行文件、驱动、配置和用户存档。源目录保持只读，生成库必须位于源目录之外。读取库文件时使用受库根约束的相对路径，校验哈希及必要的数据尺寸，不能接受越出库目录的路径。
 

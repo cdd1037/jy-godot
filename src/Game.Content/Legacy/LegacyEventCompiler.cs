@@ -86,12 +86,15 @@ public static class LegacyEventCompiler
                 56 => EventOperation.AddFame, 59 => EventOperation.DismissParty,
                 61 => EventOperation.BranchBooks, 65 => EventOperation.MoveShop,
                 13 or 14 => EventOperation.Fade,
+                25 => EventOperation.PanCamera, 30 => EventOperation.ScriptedWalk, 44 => EventOperation.AnimatePair,
                 _ => throw new NotSupportedException($"KDEF {id}, word {pc}: opcode {opcode} is not implemented.")
             };
             if (opcode == 51) arguments = [2547, 18, 114, 0];
             // OpenLegend Z_DAT/0x2E278.md and 0x2E28A.md fix direction and
             // blocking order. Duration is a remake approximation, not DOS frames.
             if (opcode is 13 or 14) arguments = [opcode == 14 ? 1 : 0, 450];
+            // Z.DAT sub_2F9F2: the second end word is never read.
+            if (opcode == 44) arguments = arguments.Take(5).ToArray();
             if (opcode is 5 or 9 or 11)
             {
                 text = opcode == 5 ? "是否与之过招？" : opcode == 9 ? "是否邀请加入？" : "是否休息？";

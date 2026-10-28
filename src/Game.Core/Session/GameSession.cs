@@ -24,13 +24,16 @@ public sealed partial class GameSession : IEventWorld
     private readonly Dictionary<string, int> _variables = new(StringComparer.Ordinal);
     private readonly StoryCatalog? _story;
 
-    public GameSession(SceneDefinition scene, StoryCatalog? story = null, bool skipOpening = false)
+    public GameSession(SceneDefinition scene, StoryCatalog? story = null, bool skipOpening = false,
+        WorldMapDefinition? worldMap = null, WorldTravelSnapshot? travelStart = null)
     {
         Definition = scene;
         Scene = new SceneRuntimeState(scene);
         _story = story;
         World = new SceneWorldState(story?.SceneId ?? 0, Scene, story?.World);
         Party = story?.Party is { } party ? new PartyState(party) : null;
+        MainMap = worldMap;
+        Travel = worldMap is not null && travelStart is not null ? new WorldTravelState(travelStart) : null;
         _position = scene.Spawn;
         var block = SceneMovementRules.Check(scene, _position, _position);
         if (block != MovementBlock.None)
@@ -68,15 +71,19 @@ public sealed partial class GameSession : IEventWorld
         events.TakeSounds();
     }
 
-    public SceneDefinition Definition { get; }
-    public SceneRuntimeState Scene { get; }
+    public SceneDefinition Definition { get; private set; }
+    public SceneRuntimeState Scene { get; private set; }
     public SceneWorldState World { get; }
     public PartyState? Party { get; }
     public EventRunner? Events { get; }
+    public StoryCatalog? Story => _story;
     public bool IsEventRunning => Events?.IsRunning == true;
     public long PresentationRevision { get; private set; }
     public double FadeOpacity { get; private set; }
-    public PlayerView Player => new(_position, _facing, _steps, _picture, _walkFrameOffset);
+    public PlayerView Player => IsWorld && Travel is { } travel
+        ? new(travel.Snapshot.Position, travel.Snapshot.InShip ? travel.Snapshot.ShipFacing : travel.Snapshot.Facing,
+            _steps, WorldPlayerPicture, _walkFrameOffset)
+        : new(_position, _facing, _steps, _picture, _walkFrameOffset);
     public IReadOnlyDictionary<int, int> Inventory => new ReadOnlyDictionary<int, int>(_inventory);
     public IReadOnlyDictionary<string, int> Variables => new ReadOnlyDictionary<string, int>(_variables);
     public string? InteractionMessage { get; private set; }
@@ -84,7 +91,8 @@ public sealed partial class GameSession : IEventWorld
     public MovementResult TryMove(Direction direction)
     {
         if (!Enum.IsDefined(direction)) throw new ArgumentOutOfRangeException(nameof(direction));
-        if (IsEventRunning) return new(_position, _position, MovementBlock.Story);
+        if (IsInputLocked) return new(Player.Position, Player.Position, MovementBlock.Story);
+        if (IsWorld) return TryMoveWorld(direction);
         _facing = direction;
         _picture = null;
         _walkFrameOffset = _walkFrameOffset % 12 + 2;
@@ -92,21 +100,23 @@ public sealed partial class GameSession : IEventWorld
         var target = _position.Step(direction);
         var block = SceneMovementRules.Check(Scene, _position, target);
         var from = _position;
-        if (block == MovementBlock.None) { _position = target; _steps++; _arrivalPending = true; }
+        if (block == MovementBlock.None) { _position = target; _steps++; _arrivalPending = true; ResetCameraAfterMovement(); }
         return new MovementResult(from, _position, block);
     }
 
     public void CompleteMovement()
     {
-        if (!_arrivalPending || IsEventRunning) return;
+        if (!_arrivalPending || IsInputLocked) return;
         _arrivalPending = false;
+        if (IsWorld) return;
         var point = Scene.EventAt(_position);
-        if (point is not null && point[4] > 0) StartEvent(point[4], Scene.At(MapLayer.Event, _position), _position);
+        if (point is not null && point[4] > 0 && StartEvent(point[4], Scene.At(MapLayer.Event, _position), _position) && IsEventRunning) return;
+        ResolveTravelAfterAction();
     }
 
     internal void StandAfterWalking()
     {
-        if (IsEventRunning || _walkFrameOffset == 0) return;
+        if (IsInputLocked || _walkFrameOffset == 0) return;
         _walkFrameOffset = 0;
         PresentationRevision++;
     }
@@ -114,7 +124,7 @@ public sealed partial class GameSession : IEventWorld
     public bool Interact()
     {
         InteractionMessage = null;
-        if (IsEventRunning) return false;
+        if (IsInputLocked || IsWorld) return false;
         var target = _position.Step(_facing);
         if (!SceneDefinition.Contains(target) || Scene.EventAt(target) is not { } point || point[2] <= 0) return false;
         return StartEvent(point[2], Scene.At(MapLayer.Event, target), target);
@@ -123,7 +133,7 @@ public sealed partial class GameSession : IEventWorld
     public bool UseItem(int itemId)
     {
         InteractionMessage = null;
-        if (IsEventRunning) return false;
+        if (IsInputLocked || IsWorld) return false;
         if (_inventory.GetValueOrDefault(itemId) <= 0) { InteractionMessage = "行囊中没有这件物品。"; return false; }
         var target = _position.Step(_facing);
         if (!SceneDefinition.Contains(target) || Scene.EventAt(target) is not { } point || point[3] <= 0)
@@ -144,6 +154,7 @@ public sealed partial class GameSession : IEventWorld
         _walkFrameOffset = 0;
         if (!Events.TryStart(programId, eventIndex, target, itemId))
         { _picture = previousPicture; _walkFrameOffset = previousWalkFrame; InteractionMessage = Events.Error ?? "事件暂时无法启动。"; return false; }
+        _resolveAfterEvent = true;
         PresentationRevision++;
         return true;
     }
@@ -182,7 +193,7 @@ public sealed partial class GameSession : IEventWorld
     void IEventWorld.SetTile(IReadOnlyList<int> args) => World.SetTile(args[0], (MapLayer)args[1], new(args[2], args[3]), args[4]);
     void IEventWorld.Teleport(GridPosition position)
     {
-        _position = position; _arrivalPending = false; _picture = null; PresentationRevision++;
+        _position = position; _arrivalPending = false; _picture = null; ResetCameraAfterMovement(); PresentationRevision++;
     }
     void IEventWorld.ValidateCommand(EventCommand command, int context)
     {
@@ -204,5 +215,6 @@ public sealed partial class GameSession : IEventWorld
                 break;
         }
         ValidateGameCommand(command, context);
+        ValidatePresentationCommand(command);
     }
 }

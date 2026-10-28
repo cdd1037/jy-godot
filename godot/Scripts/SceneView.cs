@@ -37,7 +37,7 @@ public partial class SceneView : Control
         Resized += QueueRedraw;
     }
 
-    public void LoadPackage(ScenePackage package)
+    public void LoadPackage(ScenePackage package, GameSession? retainedSession = null, long? travelToken = null)
     {
         // Borrow the active library's cache while constructing the new view.
         // A failed view must dispose only resources created during this attempt.
@@ -86,7 +86,10 @@ public partial class SceneView : Control
                 portrait.Region = new Rect2(sprite.X, sprite.Y, sprite.Width, sprite.Height);
                 portraits.Add(sprite.LegacyId, portrait);
             }
-            session = new GameSession(package.Scene, package.Story, skipOpening: !PlayOpening);
+            session = retainedSession ?? new GameSession(package.Scene, package.Story, skipOpening: !PlayOpening,
+                worldMap: package.Library?.MainMap, travelStart: package.Library?.GameData.TravelStart);
+            if (travelToken is { } token && !session.CommitTravel(token))
+                throw new InvalidOperationException("The scene transition is no longer ready.");
             walker = new SceneWalker(session);
         }
         catch
@@ -118,7 +121,7 @@ public partial class SceneView : Control
     {
         if (_session is null) return;
         var revision = _session.Scene.Revision + _session.PresentationRevision;
-        _session.Events?.Advance(TimeSpan.FromSeconds(delta));
+        _session.Advance(TimeSpan.FromSeconds(delta));
         var wasMoving = IsMoving;
         _walker!.Advance(delta);
         if (revision != _session.Scene.Revision + _session.PresentationRevision) QueueRedraw();
@@ -163,6 +166,13 @@ public partial class SceneView : Control
             return;
         }
 
+        if (_session.IsWorld)
+        {
+            DrawWorld();
+            if (_session.FadeOpacity > 0)
+                DrawRect(new Rect2(Vector2.Zero, Size), new Color(0, 0, 0, (float)_session.FadeOpacity));
+            return;
+        }
         var scene = _session.Scene;
         var player = _session.Player;
         Vector2 Project(GridPosition point, int height = 0)
@@ -170,13 +180,17 @@ public partial class SceneView : Control
             var (x, y) = IsometricProjection.Project(point, height);
             return new Vector2(x, y);
         }
-        var fromCell = _walker!.From;
-        var toCell = _walker.To;
-        var progress = SmoothMovement ? _walker.Progress : 1;
+        var motion = _session.ScriptedMotion;
+        var fromCell = motion?.From ?? _walker!.From;
+        var toCell = motion?.To ?? _walker!.To;
+        if (motion is null && !_walker!.IsMoving) fromCell = toCell = player.Position;
+        var progress = SmoothMovement ? motion?.Progress ?? _walker!.Progress : 1;
         var from = Project(fromCell, scene.At(MapLayer.BuildingHeight, fromCell));
         var to = Project(toCell, scene.At(MapLayer.BuildingHeight, toCell));
         var actor = from.Lerp(to, (float)progress);
-        var origin = Size / 2 - actor * _zoom;
+        var camera = _session.Camera is { } view
+            ? new Vector2((float)((view.X - view.Y) * 18), (float)((view.X + view.Y) * 9)) : actor;
+        var origin = Size / 2 - camera * _zoom;
         DrawnSprites = 0;
         void Sprite(int id, Vector2 anchor)
         {

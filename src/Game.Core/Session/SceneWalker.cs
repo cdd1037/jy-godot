@@ -47,7 +47,7 @@ public sealed class SceneWalker
     /// <summary>Held directions in press order; the newest direction wins a chord.</summary>
     public MovementResult? ReadInput(IReadOnlyList<Direction> held, bool enabled)
     {
-        enabled &= !_session.IsEventRunning;
+        enabled &= !_session.IsInputLocked;
         _blocked.RemoveWhere(direction => !held.Contains(direction));
         if (!enabled)
         {

@@ -20,6 +20,12 @@ public interface IEventWorld
     string? ExecuteGameCommand(EventCommand command, int context, GridPosition trigger, int randomValue) =>
         throw new InvalidOperationException("Game state service is unavailable.");
     void SetFade(double opacity) => throw new InvalidOperationException("Fade presentation service is unavailable.");
+    void SetCameraAxis(bool horizontal, int coordinate) => throw new InvalidOperationException("Scene camera service is unavailable.");
+    void BeginScriptedStep(Direction direction) => throw new InvalidOperationException("Scripted movement service is unavailable.");
+    void UpdateScriptedMotion(double progress) => throw new InvalidOperationException("Scripted movement service is unavailable.");
+    void EndScriptedWalk() => throw new InvalidOperationException("Scripted movement service is unavailable.");
+    void CancelScriptedMotion() { }
+    void SetPictureWrapped(int eventIndex, int picture) => SetPicture(eventIndex, unchecked((short)picture));
 }
 
 public enum EventPresentationKind { Dialogue, Item, Error, Choice, Notice }
@@ -31,6 +37,7 @@ public sealed class EventRunner
 {
     // OpenLegend's picture animation waits two BIOS ticks for each even frame.
     public static readonly TimeSpan AnimationFrameTime = TimeSpan.FromSeconds(2.0 * 65536 / 1193182);
+    public static readonly TimeSpan ScriptedWalkFrameTime = TimeSpan.FromSeconds(3.0 * 65536 / 1193182);
     private readonly StoryCatalog _catalog;
     private readonly IEventWorld _world;
     private readonly Queue<int> _sounds = [];
@@ -52,6 +59,11 @@ public sealed class EventRunner
     private int _fadeTarget;
     private TimeSpan _fadeElapsed, _fadeDuration;
     private EventCommand? _fadeCommand;
+    private EventOperation? _sceneOperation;
+    private EventCommand? _sceneCommand;
+    private int _sceneX, _sceneY, _targetX, _targetY;
+    private int _pairFirstEvent, _pairFirstFrame, _pairFirstEnd, _pairSecondEvent, _pairSecondFrame;
+    private TimeSpan _sceneWait;
 
     public EventRunner(StoryCatalog catalog, IEventWorld world, uint randomSeed = 1)
     {
@@ -137,6 +149,28 @@ public sealed class EventRunner
     {
         if (elapsed < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(elapsed));
         if (Pending is not null || _program is null) return;
+        if (_sceneOperation is not null)
+        {
+            try
+            {
+                _sceneWait -= elapsed;
+                UpdateScriptedProgress();
+                while (_sceneWait <= TimeSpan.Zero)
+                {
+                    var overdue = -_sceneWait;
+                    if (!NextSceneFrame())
+                    {
+                        if (!_refresh) Pump();
+                        return;
+                    }
+                    _sceneWait -= overdue;
+                    UpdateScriptedProgress();
+                }
+            }
+            catch (Exception error) when (error is ArgumentException or InvalidOperationException or OverflowException or KeyNotFoundException)
+            { Fail(error, _sceneCommand, _program?.Id); }
+            return;
+        }
         if (_fading)
         {
             try
@@ -267,6 +301,18 @@ public sealed class EventRunner
                             command.Choices, _cancelTarget != -1);
                         return;
                     case EventOperation.Wait: _wait = TimeSpan.FromMilliseconds(arguments[0]); return;
+                    case EventOperation.PanCamera:
+                    case EventOperation.ScriptedWalk:
+                        _sceneOperation = command.Operation; _sceneCommand = command;
+                        _sceneX = arguments[0]; _sceneY = arguments[1]; _targetX = arguments[2]; _targetY = arguments[3];
+                        if (NextSceneFrame() || _refresh) return;
+                        break;
+                    case EventOperation.AnimatePair:
+                        _sceneOperation = command.Operation; _sceneCommand = command;
+                        _pairFirstEvent = arguments[0]; _pairFirstFrame = arguments[1]; _pairFirstEnd = arguments[2];
+                        _pairSecondEvent = arguments[3]; _pairSecondFrame = arguments[4];
+                        if (NextSceneFrame()) return;
+                        break;
                     case EventOperation.Fade:
                         _fadeTarget = arguments[0];
                         _fadeDuration = TimeSpan.FromMilliseconds(arguments[1]);
@@ -334,9 +380,58 @@ public sealed class EventRunner
 
     private void ClearTimedState()
     {
+        if (_sceneOperation == EventOperation.ScriptedWalk) _world.CancelScriptedMotion();
+        _sceneOperation = null; _sceneCommand = null; _sceneWait = TimeSpan.Zero;
         _animating = _refresh = _fading = false;
         _wait = null; _fadeCommand = null;
         _fadeElapsed = _fadeDuration = TimeSpan.Zero;
+    }
+
+    private void UpdateScriptedProgress()
+    {
+        if (_sceneOperation == EventOperation.ScriptedWalk)
+            _world.UpdateScriptedMotion(Math.Clamp(1 - _sceneWait.TotalSeconds / ScriptedWalkFrameTime.TotalSeconds, 0, 1));
+    }
+
+    // One continuation inside the existing runner, not another instruction VM.
+    // References: OpenLegend Z_DAT/0x2ED8D.md, 0x2F171.md and 0x2F9F2.md.
+    private bool NextSceneFrame()
+    {
+        if (_sceneOperation == EventOperation.AnimatePair)
+        {
+            if (_pairFirstFrame > _pairFirstEnd) { _sceneOperation = null; _sceneCommand = null; return false; }
+            _world.SetPictureWrapped(_pairFirstEvent, _pairFirstFrame);
+            _world.SetPictureWrapped(_pairSecondEvent, _pairSecondFrame);
+            _pairFirstFrame += 2; _pairSecondFrame += 2;
+            _sceneWait = AnimationFrameTime;
+            return true;
+        }
+        var horizontal = _sceneX != _targetX;
+        if (!horizontal && _sceneY == _targetY)
+        {
+            if (_sceneOperation == EventOperation.ScriptedWalk)
+            {
+                _world.EndScriptedWalk();
+                _refresh = true; // Final standing present, including zero-distance walks.
+            }
+            _sceneOperation = null; _sceneCommand = null;
+            return false;
+        }
+        var step = horizontal ? Math.Sign(_targetX - _sceneX) : Math.Sign(_targetY - _sceneY);
+        if (_sceneOperation == EventOperation.PanCamera)
+        {
+            _world.SetCameraAxis(horizontal, horizontal ? _sceneX : _sceneY);
+            _sceneWait = AnimationFrameTime;
+        }
+        else
+        {
+            var direction = horizontal ? (step < 0 ? Direction.Left : Direction.Right) :
+                step < 0 ? Direction.Up : Direction.Down;
+            _world.BeginScriptedStep(direction);
+            _sceneWait = ScriptedWalkFrameTime;
+        }
+        if (horizontal) _sceneX += step; else _sceneY += step;
+        return true;
     }
 
     private void Fail(Exception error, EventCommand? command, int? programId)

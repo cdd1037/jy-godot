@@ -35,6 +35,9 @@ public sealed class LegacyGameImporter
         var events = LegacyArchive.Parse(Read("ALLDEF.IDX"), Read("ALLDEF.GRP"));
         var world = LegacyWorldImporter.Read(ranger, maps, events);
         var gameplay = options.IncludeStory ? LegacyGameDataImporter.Read(Read, ranger, options.ScriptDialect) : new GameDataDocument();
+        var hasMainMap = LegacyWorldMapImporter.LayerFiles.Any(files.ContainsKey);
+        var mainMap = hasMainMap ? LegacyWorldMapImporter.Read(Read) : null;
+        if (mainMap is not null) gameplay = gameplay with { TravelStart = LegacyWorldMapImporter.ReadState(ranger.Entry(0)) };
         var rawPalette = Read("MMAP.COL");
         var palette = LegacySpriteDecoder.ReadPalette(rawPalette);
         var parent = Path.GetDirectoryName(output)!;
@@ -74,12 +77,18 @@ public sealed class LegacyGameImporter
             ContentJson.Write(Path.Combine(staging, "data/audio.json"), audio);
             ContentJson.Write(Path.Combine(staging, "data/source-index.json"), sources);
             File.WriteAllBytes(Path.Combine(staging, "assets/palette.rgb6"), rawPalette);
+            if (mainMap is not null)
+            {
+                using var mainLayers = File.Create(Path.Combine(staging, "data/main-map.bin"));
+                foreach (var name in LegacyWorldMapImporter.LayerFiles) mainLayers.Write(Read(name));
+            }
             var fileHashes = Directory.GetFiles(staging, "*", SearchOption.AllDirectories).ToDictionary(
                 path => Path.GetRelativePath(staging, path).Replace('\\', '/'),
                 path => Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(path))), StringComparer.Ordinal);
             var manifest = new GameLibraryManifest
             {
                 DefaultScene = index.Any(scene => scene.SceneId == 70) ? 70 : index[0].SceneId,
+                MainMap = mainMap is null ? null : "data/main-map.bin",
                 SourceHashes = hashes, FileHashes = fileHashes
             };
             ContentJson.Write(Path.Combine(staging, "manifest.json"), manifest);

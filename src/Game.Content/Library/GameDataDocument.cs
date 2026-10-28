@@ -15,6 +15,7 @@ public sealed record GameDataDocument
     public Dictionary<int, int> InitialInventory { get; init; } = [];
     public int[] InitialItemIds { get; init; } = [];
     public PartyDefinition? Party { get; init; }
+    public WorldTravelSnapshot? TravelStart { get; init; }
     public Dictionary<int, string> UnavailablePrograms { get; init; } = [];
     public Dictionary<int, string> VariableNames { get; init; } = [];
     public Dictionary<int, string> PortraitNames { get; init; } = [];

@@ -12,7 +12,7 @@ public enum EventOperation
     JoinParty, LeaveParty, RestParty, ClearPartyMp, SetRoleAttribute, AddRoleAttribute,
     BranchRole, LearnMagic, SetMagic, RoleAddItem, NoticeRole, BranchParty, BranchPartyFull,
     BranchPartyFemale, DismissParty, AddFame, IncrementEventScripts, ReplaceTiles, OpenScene,
-    OpenAllScenes, BranchBooks, MoveShop, BranchItemExists, Fade
+    OpenAllScenes, BranchBooks, MoveShop, BranchItemExists, Fade, PanCamera, ScriptedWalk, AnimatePair
 }
 public enum EventComparison { Equal, NotEqual, Less, LessOrEqual, Greater, GreaterOrEqual }
 public sealed record EventChoice(string Text, int Target);
@@ -40,8 +40,9 @@ public sealed class EventCommand
             EventOperation.AddItem or EventOperation.AdjustItem or EventOperation.SetVariable or EventOperation.AddVariable or EventOperation.Teleport or
                 EventOperation.NoticeRole or EventOperation.BranchPartyFull or EventOperation.BranchPartyFemale or EventOperation.BranchBooks or EventOperation.Fade => 2,
             EventOperation.BranchUsedItem => 3,
-            EventOperation.RandomDialogue or EventOperation.BranchItem or EventOperation.SetMagic or EventOperation.ReplaceTiles => 4,
-            EventOperation.BranchVariable or EventOperation.SetTile or EventOperation.IncrementEventScripts => 5,
+            EventOperation.RandomDialogue or EventOperation.BranchItem or EventOperation.SetMagic or EventOperation.ReplaceTiles or
+                EventOperation.PanCamera or EventOperation.ScriptedWalk => 4,
+            EventOperation.BranchVariable or EventOperation.SetTile or EventOperation.IncrementEventScripts or EventOperation.AnimatePair => 5,
             EventOperation.BranchEvent or EventOperation.BranchRole => 6,
             EventOperation.BranchAllItems => 7,
             _ => throw new ArgumentException("Unknown event operation.")
@@ -71,6 +72,17 @@ public sealed class EventCommand
             (_arguments[0] is < -1 or >= 200 || _arguments[1] < 0 || _arguments[2] < _arguments[1] ||
              _arguments[2] > 32766 || (_arguments[1] & 1) != 0 || (_arguments[2] & 1) != 0))
             throw new ArgumentException("Invalid animation target or frame range.");
+        if (operation is EventOperation.PanCamera or EventOperation.ScriptedWalk)
+        {
+            if (_arguments.Any(value => value is < short.MinValue or > short.MaxValue) ||
+                Math.Abs((long)_arguments[2] - _arguments[0]) + Math.Abs((long)_arguments[3] - _arguments[1]) > 4096)
+                throw new ArgumentException("Scene motion needs signed 16-bit coordinates and at most 4096 steps.");
+        }
+        if (operation == EventOperation.AnimatePair &&
+            (_arguments[0] is < -1 or >= 200 || _arguments[3] is < -1 or >= 200 ||
+             new[] { _arguments[1], _arguments[2], _arguments[4] }.Any(value => value is < short.MinValue or > short.MaxValue) ||
+             ((long)_arguments[2] - _arguments[1]) / 2 + 1 > 4096))
+            throw new ArgumentException("Invalid paired animation targets, signed picture words or frame budget.");
         SourceOpcode = sourceOpcode;
     }
     public int Id { get; }

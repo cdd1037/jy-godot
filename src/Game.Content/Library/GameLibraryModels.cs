@@ -18,6 +18,7 @@ public sealed record GameLibraryManifest
     public string Audio { get; init; } = "data/audio.json";
     public string SourceIndex { get; init; } = "data/source-index.json";
     public string Palette { get; init; } = "assets/palette.rgb6";
+    public string? MainMap { get; init; }
     public Dictionary<string, string> SourceHashes { get; init; } = [];
     public Dictionary<string, string> FileHashes { get; init; } = [];
 }

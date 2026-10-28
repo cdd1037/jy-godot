@@ -10,6 +10,7 @@ param(
     [switch]$GridMovement,
     [switch]$PlayOpening,
     [switch]$EventDemo,
+    [switch]$TravelSmoke,
     [string]$StoryOverlay
 )
 $ErrorActionPreference = "Stop"
@@ -23,6 +24,7 @@ if ($EventDemo) {
     $StoryOverlay = Join-Path $PSScriptRoot "content\examples\event-demo.json"
 }
 if ($Package -and $Source) { throw "Use either -Library/-Package or -Source." }
+if ($TravelSmoke -and (-not $Smoke -or $EventDemo -or $Scene -ne 70)) { throw "-TravelSmoke requires -Smoke, scene 70, and no -EventDemo." }
 $arguments = @("--path", (Join-Path $PSScriptRoot "godot"))
 if ($Smoke) { $arguments += @("--fixed-fps", "60") }
 if ($Headless) { $arguments += "--headless" }
@@ -35,6 +37,7 @@ if ($Smoke) { $arguments += "--smoke-test" }
 if ($GridMovement) { $arguments += "--grid-movement" }
 if ($PlayOpening) { $arguments += "--play-opening" }
 if ($EventDemo -and $Smoke) { $arguments += "--event-smoke" }
+if ($TravelSmoke) { $arguments += "--travel-smoke" }
 if ($Capture) { $arguments += @("--capture", [IO.Path]::GetFullPath($Capture)) }
 if ($Report) { $arguments += @("--report", [IO.Path]::GetFullPath($Report)) }
 & $Godot @arguments
