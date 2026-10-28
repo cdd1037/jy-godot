@@ -55,7 +55,7 @@ public sealed class GameSessionBattleTests
         bool progression = true, bool medicine = false)
     {
         var party = new PartyDefinition(defeat ? [Role(0, 0, 10, 15), Role(1, 500, 100, 60)] :
-            [Role(0, 500, 100, 60), Role(1, 0, 10, 30)], [0, -1, -1, -1, -1, -1]);
+            [Role(0, 500, 100, 60), Role(1, 0, medicine ? 100 : 10, 30)], [0, -1, -1, -1, -1, -1]);
         var metadata = new short[26]; metadata[8] = -1;
         var points = Enumerable.Range(0, 200).Select(_ => new short[11]).ToArray();
         foreach (var point in points) point[9] = point[10] = -1;
@@ -79,11 +79,38 @@ public sealed class GameSessionBattleTests
         Assert.IsNotNull(session.Battle); Assert.IsNotNull(session.Events.PendingBattle);
         return session.Battle;
     }
-    private static void HeroWins(BattleSession battle)
+    private static void CompletePresentation(GameSession session)
     {
+        var battle = session.Battle ?? throw new InvalidOperationException("No active fixture battle.");
+        for (var budget = 0; battle.IsPresenting && budget < 1000; budget++)
+        {
+            var frame = battle.Presentation!;
+            if (frame.WaitingForConfirmation) Assert.IsTrue(battle.ConfirmPresentation(frame.Token));
+            else session.Advance(frame.Duration);
+        }
+        Assert.IsFalse(battle.IsPresenting, "Battle presentation did not reach its next input boundary.");
+    }
+    private static void CompleteEnemyTurn(GameSession session)
+    {
+        var battle = session.Battle!;
+        for (var budget = 0; battle.Outcome == BattleOutcome.Ongoing && battle.CurrentActor?.IsFriendly == false && budget < 100; budget++)
+        {
+            if (battle.IsPresenting) CompletePresentation(session);
+            else Assert.IsTrue(battle.StepEnemy(), battle.LastError);
+        }
+        Assert.IsFalse(battle.IsPresenting);
+        Assert.IsTrue(battle.Outcome != BattleOutcome.Ongoing || battle.CurrentActor?.IsFriendly == true,
+            "Enemy continuation did not finish its action.");
+    }
+    private static void HeroWins(GameSession session)
+    {
+        var battle = session.Battle!;
         Assert.IsTrue(battle.ConfirmParty([]), battle.LastError);
         Assert.IsTrue(battle.CurrentActor!.IsFriendly);
         Assert.IsTrue(battle.AttackMagic(0, battle.Combatants.Single(actor => !actor.IsFriendly).Position), battle.LastError);
+        Assert.IsTrue(battle.IsPresenting); Assert.AreEqual(BattleOutcome.Ongoing, battle.Outcome);
+        Assert.IsFalse(session.FinishBattle());
+        CompletePresentation(session);
         Assert.AreEqual(BattleOutcome.Victory, battle.Outcome);
     }
 
@@ -101,9 +128,16 @@ public sealed class GameSessionBattleTests
             Assert.AreEqual(remaining > 0, ((IEventWorld)session).ItemExists(0));
             Assert.AreSame(party.Roles[0], battle.Combatants.Single(actor => actor.IsFriendly).Role);
             Assert.IsTrue(party.GetWord(0, RoleWords.Hp) > 50);
-            Assert.IsTrue(battle.StepEnemy(), battle.LastError);
+            var frame = battle.Presentation!;
+            Assert.AreEqual(BattlePresentationStage.Item, frame.Stage); Assert.IsTrue(frame.WaitingForConfirmation);
+            session.Advance(TimeSpan.FromMinutes(1)); Assert.IsTrue(battle.IsPresenting);
+            Assert.IsTrue(battle.CurrentActor!.IsFriendly); Assert.IsFalse(battle.StepEnemy());
+            Assert.IsFalse(battle.ConfirmPresentation(frame.Token + 1)); Assert.IsTrue(battle.ConfirmPresentation(frame.Token));
+            Assert.IsFalse(battle.ConfirmPresentation(frame.Token));
+            CompleteEnemyTurn(session);
         }
-        Assert.IsTrue(battle.AttackMagic(0, new(11, 10)), battle.LastError);
+        Assert.IsTrue(battle.AttackMagic(0, battle.Combatants.Single(actor => !actor.IsFriendly).Position), battle.LastError);
+        Assert.IsTrue(battle.IsPresenting); Assert.IsFalse(session.FinishBattle()); CompletePresentation(session);
         Assert.AreEqual(BattleOutcome.Victory, battle.Outcome); Assert.IsTrue(session.FinishBattle());
         Assert.AreSame(events, session.Events); Assert.AreEqual(1, session.Inventory[0]); // Only the actual post-battle reward.
         Assert.AreNotEqual(1u, events.CaptureIdleState().RandomState);
@@ -130,9 +164,13 @@ public sealed class GameSessionBattleTests
         if (defeat)
         {
             Assert.IsFalse(battle.CurrentActor!.IsFriendly);
-            Assert.IsTrue(battle.StepEnemy(), battle.LastError);
+            CompleteEnemyTurn(session);
         }
-        else Assert.IsTrue(battle.AttackMagic(0, new(11, 10)), battle.LastError);
+        else
+        {
+            Assert.IsTrue(battle.AttackMagic(0, new(11, 10)), battle.LastError);
+            Assert.IsTrue(battle.IsPresenting); Assert.IsFalse(session.FinishBattle()); CompletePresentation(session);
+        }
         var expected = defeat ? BattleOutcome.Defeat : BattleOutcome.Victory;
         Assert.AreEqual(expected, battle.Outcome);
         // Even a resolved battlefield cannot resume its event before authoritative settlement.
@@ -175,7 +213,7 @@ public sealed class GameSessionBattleTests
     {
         var session = Session(); session.Party!.SetWord(0, RoleWords.Hp, 3);
         session.Party.SetWord(0, RoleWords.Hurt, 60);
-        var battle = Start(session); HeroWins(battle);
+        var battle = Start(session); HeroWins(session);
         Assert.AreEqual(3, session.Party.GetWord(0, RoleWords.Hp));
         Assert.IsTrue(session.FinishBattle());
         Assert.AreEqual(17, session.Party.GetWord(0, RoleWords.Hp)); // MaxHP/5=20, then hurt/20=3.
@@ -206,14 +244,14 @@ public sealed class GameSessionBattleTests
     public void ConsecutiveBattlesShareTheEventRandomStreamAndCarryTheOriginalHpCostScale()
     {
         var session = Session(TwoBattles()); var party = session.Party; var events = session.Events;
-        uint state = 1; var first = Start(session); HeroWins(first);
+        uint state = 1; var first = Start(session); HeroWins(session);
         Assert.AreEqual(3, first.HpCostScale); Assert.AreEqual(96, party!.GetWord(0, RoleWords.Mp));
         ExpectHitAndDialogue(session, ref state);
         Assert.IsTrue(events!.Confirm(events.Pending!.Token));
         var second = session.Battle!; Assert.AreNotSame(first, second);
         Assert.AreEqual(3, second.HpCostScale); Assert.AreEqual(BattleOutcome.Ongoing, second.Outcome);
         Assert.AreEqual(10, party.GetWord(1, RoleWords.Hp)); // Enemy baseline never mutated the shared role.
-        HeroWins(second); ExpectHitAndDialogue(session, ref state);
+        HeroWins(session); ExpectHitAndDialogue(session, ref state);
         Assert.AreEqual(92, party.GetWord(0, RoleWords.Mp));
         Assert.IsTrue(events.Confirm(events.Pending!.Token));
         Assert.IsFalse(session.IsEventRunning); Assert.AreEqual(1, events.CompletedCount);
@@ -224,20 +262,21 @@ public sealed class GameSessionBattleTests
     [TestMethod]
     public void EmptyStrikeInTheNextBattleUsesThePreviousBattlesHpCostScale()
     {
-        var session = Session(TwoBattles()); HeroWins(Start(session)); Assert.IsTrue(session.FinishBattle());
+        var session = Session(TwoBattles()); Start(session); HeroWins(session); Assert.IsTrue(session.FinishBattle());
         Assert.IsTrue(session.Events!.Confirm(session.Events.Pending!.Token));
         var second = session.Battle!; Assert.AreEqual(3, second.HpCostScale);
         Assert.IsTrue(second.ConfirmParty([]));
         Assert.IsTrue(second.AttackMagic(0, new(10, 11)), second.LastError);
         Assert.AreEqual(0, second.LastDamage.Count); Assert.AreEqual(3, second.HpCostScale);
         Assert.AreEqual(92, session.Party!.GetWord(0, RoleWords.Mp));
+        Assert.IsTrue(second.IsPresenting); CompletePresentation(session); Assert.IsFalse(second.IsPresenting);
         Assert.AreEqual(BattleOutcome.Ongoing, second.Outcome); Assert.IsFalse(session.FinishBattle());
     }
 
     [TestMethod]
     public void ExplorationCheckpointKeepsTheCrossBattleCostScaleAndRandomStream()
     {
-        var source = Session(); HeroWins(Start(source)); Assert.IsTrue(source.FinishBattle());
+        var source = Session(); Start(source); HeroWins(source); Assert.IsTrue(source.FinishBattle());
         var snapshot = source.CaptureSnapshot(); Assert.AreEqual(3, snapshot.HpCostScale);
         var restored = GameSession.Restore(source.Definition, source.Story, snapshot, battles: source.BattleResources);
         var originalBattle = Start(source); var restoredBattle = Start(restored);
@@ -247,5 +286,7 @@ public sealed class GameSessionBattleTests
         Assert.AreEqual(92, restored.Party!.GetWord(0, RoleWords.Mp));
         Assert.AreEqual(source.Party!.GetWord(0, RoleWords.MagicLevelBegin), restored.Party.GetWord(0, RoleWords.MagicLevelBegin));
         Assert.AreEqual(originalBattle.HpCostScale, restoredBattle.HpCostScale);
+        CompletePresentation(source); CompletePresentation(restored);
+        Assert.AreEqual(originalBattle.Outcome, restoredBattle.Outcome);
     }
 }

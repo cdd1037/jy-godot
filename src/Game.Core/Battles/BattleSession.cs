@@ -13,7 +13,7 @@ namespace JinYong.Core.Battles;
 public sealed partial class BattleSession
 {
     public const int Capacity = 26;
-    public const string AiPolicyDescription = "Nearest opponent, first affordable learned magic, path movement, then native rest; advanced DOS AI selectors are not yet implemented.";
+    public const string AiPolicyDescription = "DOS action priorities, carried items, support, packed magic and role-based targeting with movement continuations; unsafe legacy indices and path aliases are rejected.";
     private readonly PartyState _party;
     private readonly IReadOnlyDictionary<int, MagicDefinition> _magics;
     private readonly IReadOnlyDictionary<int, ItemDefinition> _items;
@@ -29,12 +29,14 @@ public sealed partial class BattleSession
 
     public BattleSession(BattleDefinition definition, BattlefieldDefinition battlefield, PartyState party,
         IReadOnlyDictionary<int, MagicDefinition> magics, IReadOnlyDictionary<int, ItemDefinition>? items = null,
-        uint randomSeed = 1, int initialCostScale = 0, Func<int, int>? random = null, IBattleInventory? inventory = null)
+        uint randomSeed = 1, int initialCostScale = 0, Func<int, int>? random = null, IBattleInventory? inventory = null,
+        bool presentActions = false)
     {
         if (definition.BattlefieldId != battlefield.Id) throw new ArgumentException("Battlefield ID does not match the battle definition.");
         Definition = definition; Battlefield = battlefield; _party = party; _magics = magics;
         _items = items ?? new Dictionary<int, ItemDefinition>();
         _battleInventory = inventory;
+        _presentActions = presentActions;
         _randomState = randomSeed;
         _random = bound =>
         {
@@ -79,6 +81,7 @@ public sealed partial class BattleSession
 
     public bool ConfirmParty(IReadOnlyCollection<int> selectedRoleIds)
     {
+        if (IsPresenting) return Fail("An action is still being presented.");
         if (Phase != BattlePhase.PartySelection) return Fail("Party selection is already complete.");
         if (selectedRoleIds.Any(id => !SelectableRoleIds.Contains(id))) return Fail("Selected role is outside the party.");
         var selected = _party.Members.Where(id => selectedRoleIds.Contains(id) && !_mandatory.Contains(id)).ToArray();
@@ -157,6 +160,7 @@ public sealed partial class BattleSession
     }
     public BattleOutcome EvaluateOutcome()
     {
+        if (IsPresenting) return Outcome;
         if (!_rosterComplete || Phase == BattlePhase.Finished) return Outcome;
         foreach (var actor in _combatants)
             if (actor.Hp <= 0) actor.Hidden = true;
@@ -167,15 +171,20 @@ public sealed partial class BattleSession
         if (Outcome != BattleOutcome.Ongoing) Phase = BattlePhase.Finished;
         return Outcome;
     }
-    public IReadOnlyDictionary<GridPosition, int> ReachableMoves() => CurrentActor is { PhysicalPower: > 5, RoundValue: > 0 } actor
+    public IReadOnlyDictionary<GridPosition, int> ReachableMoves() => !IsPresenting && CurrentActor is { PhysicalPower: > 5, RoundValue: > 0 } actor
         ? BattlePathing.Distances(Battlefield, Combatants, actor.Position, maximum: actor.RoundValue)
         : new ReadOnlyDictionary<GridPosition, int>(new Dictionary<GridPosition, int>());
-    public bool TryMove(GridPosition destination)
+    public bool TryMove(GridPosition destination) => ExecuteMove(destination, automatic: false);
+    internal bool TryMoveAi(GridPosition destination) => ExecuteMove(destination, automatic: true);
+
+    private bool ExecuteMove(GridPosition destination, bool automatic)
     {
+        if (IsPresenting) return Fail("An action is still being presented.");
         if (CurrentActor is not { } actor) return Fail("No active fighter.");
-        if (actor.PhysicalPower <= 5 || actor.RoundValue <= 0) return Fail("Movement is unavailable.");
+        if (actor.RoundValue <= 0 || (automatic ? actor.IsFriendly : actor.PhysicalPower <= 5)) return Fail("Movement is unavailable.");
         var path = BattlePathing.FindPath(Battlefield, Combatants, actor.Position, destination, actor.RoundValue);
         if (path is null || path.Count <= 1) return Fail("Destination is occupied, blocked or outside movement range.");
+        var before = CaptureCombatantSnapshots(); var actorSlot = actor.Slot;
         foreach (var position in path.Skip(1))
         {
             if (actor.RoundValue == actor.Role[RoleWords.Speed] / 10)
@@ -184,9 +193,9 @@ public sealed partial class BattleSession
                 position.X < actor.Position.X ? Direction.Left : Direction.Down;
             actor.Position = position; actor.RoundValue--;
         }
-        RebuildOccupancy(); LastError = null; return true;
+        RebuildOccupancy(); QueueMovementPresentation(before, actorSlot, path); LastError = null; return true;
     }
-    public IReadOnlyList<int> AvailableMagicSlots() => CurrentActor is { PhysicalPower: > 10 } actor
+    public IReadOnlyList<int> AvailableMagicSlots() => !IsPresenting && CurrentActor is { PhysicalPower: > 10 } actor
         ? BattleMagicRules.AvailableMagicSlots(actor.Role, _magics) : [];
     public bool CanTargetMagic(int magicSlot, GridPosition target)
     {
@@ -208,20 +217,31 @@ public sealed partial class BattleSession
         return distances.TryGetValue(target, out var distance) && distance <= profile.SelectDistance;
     }
 
-    public bool AttackMagic(int magicSlot, GridPosition target, Direction direction = Direction.Up)
+    public bool AttackMagic(int magicSlot, GridPosition target, Direction direction = Direction.Up) =>
+        ExecuteMagic(magicSlot, target, direction, automatic: false);
+
+    internal bool AttackAiMagic(int magicSlot, GridPosition target, Direction direction = Direction.Up) =>
+        ExecuteMagic(magicSlot, target, direction, automatic: true);
+
+    private bool ExecuteMagic(int magicSlot, GridPosition target, Direction direction, bool automatic)
     {
+        if (IsPresenting) return Fail("An action is still being presented.");
         if (CurrentActor is not { } actor) return Fail("No active fighter.");
         try
         {
-            if (!AvailableMagicSlots().Contains(magicSlot)) return Fail("This learned magic is not currently available.");
+            if (automatic ? actor.IsFriendly || magicSlot is < 0 or >= RoleWords.MagicCount ||
+                !_magics.ContainsKey(actor.Role[RoleWords.MagicIdBegin + magicSlot]) : !AvailableMagicSlots().Contains(magicSlot))
+                return Fail("This learned magic is not currently available.");
             var magic = _magics[actor.Role[RoleWords.MagicIdBegin + magicSlot]];
             var profile = BattleMagicRules.Profile(actor.Role, magic, magicSlot);
             if (!TargetInRange(actor, profile, target)) return Fail("Attack target is outside the targeting path range.");
+            ValidateMagicPresentation(actor, magic);
             var cells = BattleMagicRules.AreaCells(profile, actor.Position, target, direction);
             var damageEvents = new List<BattleDamageEvent>();
             actor.Facing = profile.AreaType == 1 ? direction : BattleMagicRules.Facing(actor.Position, target);
             for (var iteration = 0; iteration < profile.AttackCount; iteration++)
             {
+                var before = CaptureCombatantSnapshots(); var actorSlot = actor.Slot; var damageStart = damageEvents.Count;
                 foreach (var cell in cells)
                 {
                     var victim = OccupantAt(cell.Position);
@@ -249,6 +269,7 @@ public sealed partial class BattleSession
                 var finish = BattleAttackRules.FinishIteration(actor.Role, magicSlot, magic, HpCostScale, _random);
                 actor.Role.Set(RoleWords.MagicLevelBegin + magicSlot, finish.Proficiency); actor.Role.Set(RoleWords.Mp, finish.Mp);
                 actor.RewardExperience = BattleAttackRules.Word(actor.RewardExperience + finish.RewardExperience);
+                QueueMagicPresentation(before, actorSlot, magicSlot, target, direction, damageEvents.Skip(damageStart).ToArray());
             }
             actor.Role.Set(RoleWords.PhysicalPower, BattleAttackRules.FinishAttackPhysicalPower(actor.PhysicalPower));
             LastDamage = damageEvents.AsReadOnly(); EndAction(); LastError = null; return true;
@@ -258,7 +279,9 @@ public sealed partial class BattleSession
     }
     public bool Rest()
     {
+        if (IsPresenting) return Fail("An action is still being presented.");
         if (CurrentActor is not { } actor) return Fail("No active fighter.");
+        var before = CaptureCombatantSnapshots(); var actorSlot = actor.Slot;
         var gain = _random(3) + (actor.RoundValue == actor.Role[RoleWords.Speed] / 10 ? 3 : 2);
         var physical = Math.Min(100, actor.PhysicalPower + gain); actor.Role.Set(RoleWords.PhysicalPower, physical);
         if (physical >= 30)
@@ -267,10 +290,11 @@ public sealed partial class BattleSession
             actor.Role.Set(RoleWords.Hp, Math.Min(actor.MaximumHp, actor.Hp + _random(bound) + 3));
             actor.Role.Set(RoleWords.Mp, Math.Min(actor.Role[RoleWords.MaximumMp], actor.Mp + _random(bound) + 3));
         }
-        LastDamage = []; EndAction(); LastError = null; return true;
+        LastDamage = []; QueueRestPresentation(before, actorSlot); EndAction(); LastError = null; return true;
     }
     public bool Wait()
     {
+        if (IsPresenting) return Fail("An action is still being presented.");
         if (CurrentActor is not { } actor) return Fail("No active fighter.");
         _combatants.RemoveAt(_actor); _combatants.Add(actor); RebuildOccupancy();
         while (_actor < _combatants.Count && _combatants[_actor].Hidden) _actor++;
@@ -279,6 +303,7 @@ public sealed partial class BattleSession
     }
     private void EndAction()
     {
+        if (DeferEndActionForPresentation()) return;
         _combatants[_actor].ActionDone = true;
         if (EvaluateOutcome() != BattleOutcome.Ongoing) return;
         _actor++; while (_actor < _combatants.Count && _combatants[_actor].Hidden) _actor++;
@@ -314,45 +339,6 @@ public sealed partial class BattleSession
         ApplyRoundStatus(); _settlementCompleted = true; return true;
     }
 
-    /// <summary>Deliberately limited tactical AI, using the exact same legal actions as the player.</summary>
-    public bool StepEnemy()
-    {
-        if (CurrentActor is not { IsFriendly: false } actor) return Fail("Current actor is not an enemy.");
-        var targets = _combatants.Where(other => other.IsFriendly && other.IsAlive)
-            .OrderBy(other => Math.Abs(other.Position.X - actor.Position.X) + Math.Abs(other.Position.Y - actor.Position.Y)).ToArray();
-        if (targets.Length == 0) { EvaluateOutcome(); return true; }
-        try
-        {
-            var slots = AvailableMagicSlots();
-            var attemptedAttack = false;
-            bool AttackIfPossible()
-            {
-                foreach (var slot in slots)
-                foreach (var target in targets)
-                {
-                    var magic = _magics[actor.Role[RoleWords.MagicIdBegin + slot]];
-                    var profile = BattleMagicRules.Profile(actor.Role, magic, slot);
-                    var direction = BattleMagicRules.Facing(actor.Position, target.Position);
-                    if (!TargetInRange(actor, profile, target.Position) ||
-                        !BattleMagicRules.AreaCells(profile, actor.Position, target.Position, direction).Any(cell => cell.Position == target.Position)) continue;
-                    attemptedAttack = true;
-                    return AttackMagic(slot, target.Position, direction);
-                }
-                return false;
-            }
-            if (AttackIfPossible()) return true;
-            if (attemptedAttack) return false; // Preserve an explicit kernel failure instead of silently resting.
-            var distances = BattlePathing.Distances(Battlefield, Combatants, targets[0].Position);
-            var destination = ReachableMoves().Where(pair => pair.Value > 0 && distances.ContainsKey(pair.Key))
-                .OrderBy(pair => distances[pair.Key]).ThenBy(pair => pair.Value).Select(pair => (GridPosition?)pair.Key).FirstOrDefault();
-            if (destination is { } position) TryMove(position);
-            if (AttackIfPossible()) return true;
-            if (attemptedAttack) return false;
-            return Rest();
-        }
-        catch (Exception error) when (error is ArgumentException or InvalidOperationException or OverflowException)
-        { return Fail("Enemy action is unsupported: " + error.Message); }
-    }
     private int DrawRandom(int bound)
     {
         if (bound <= 1 || bound > 30000) return 0;

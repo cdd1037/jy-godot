@@ -14,6 +14,7 @@ public partial class AppRoot
     private int _actionMedicineCount, _actionEquipmentCount, _actionBookCount, _actionThrownCount;
     private GameSession? _itemActionSession;
     private BattleCombatant? _itemActionActor;
+    private BattleSupportResult? _itemActionSupport;
     private int _itemActionMovedRound = -1;
 
     private void AdvanceItemActionsSmoke()
@@ -82,6 +83,11 @@ public partial class AppRoot
                 _ = FinishSmokeAsync(good, "Explicit prepared fixture: equipped and practiced from inventory, consumed medicine in exploration and battle, used medical/detox/poison targeting and a thrown item through UI, then settled actual battle victory in the same session/backpack.");
                 return;
             }
+            if (battle.LastSupportResult is { } support && support.ActorSlot == _itemActionActor?.Slot &&
+                ((_itemActionStage == 7 && support.Action == BattleSupportAction.Medicine) ||
+                 (_itemActionStage == 8 && support.Action == BattleSupportAction.Detox) ||
+                 (_itemActionStage == 11 && support.Action == BattleSupportAction.UsePoison))) _itemActionSupport = support;
+            if (WaitForBattleSmokePresentation(battle)) return;
             if (battle.Phase == BattlePhase.PartySelection) { PressBattleButton("确认出战"); return; }
             if (battle.Phase == BattlePhase.Finished)
             {
@@ -100,14 +106,14 @@ public partial class AppRoot
             }
             if (_itemActionStage == 7)
             {
-                if (battle.LastSupportResult is not { Action: BattleSupportAction.Medicine, Amount: > 0 })
+                if (_itemActionSupport is not { Action: BattleSupportAction.Medicine, Amount: > 0 })
                     throw new InvalidOperationException($"Medical targeting did not produce actual healing: result={battle.LastSupportResult}, mode={_battleInputMode}, selected={_world.SelectedBattleCell}, active={actor.Position}, error={battle.LastError}.");
                 _itemActionChecks++;
                 PressBattleButton("解毒：点击队友或自己"); SendBattleMouse(actor.Position); _itemActionStage = 8; return;
             }
             if (_itemActionStage == 8)
             {
-                if (battle.LastSupportResult is not { Action: BattleSupportAction.Detox, Amount: > 0 } ||
+                if (_itemActionSupport is not { Action: BattleSupportAction.Detox, Amount: > 0 } ||
                     _itemActionActor!.Role[RoleWords.Poison] != 0) throw new InvalidOperationException("Detox targeting did not clear the shared actor's poison.");
                 _itemActionChecks++;
                 SelectBattleSmokeItem(_actionMedicine);
@@ -130,7 +136,7 @@ public partial class AppRoot
             }
             if (_itemActionStage == 11)
             {
-                if (battle.LastSupportResult is not { Action: BattleSupportAction.UsePoison, Amount: > 0 })
+                if (_itemActionSupport is not { Action: BattleSupportAction.UsePoison, Amount: > 0 })
                     throw new InvalidOperationException("Poison targeting did not change an enemy.");
                 _itemActionChecks++; _itemActionStage = 12;
             }

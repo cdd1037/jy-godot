@@ -16,6 +16,11 @@ public partial class AppRoot
     private GridPosition _battleOriginalPosition;
     private Dictionary<int, int> _battleOriginalInventory = [];
     private BattleOutcome? _battleSmokeOutcome;
+    private readonly HashSet<BattlePresentationStage> _battlePresentationStages = [];
+    private readonly HashSet<string> _battlePresentationSprites = [];
+    private BattleSession? _observedPresentationBattle;
+    private long _observedPresentationToken;
+    private int _battlePresentationFrames, _battleItemConfirmations;
 
     private void AdvanceBattleSmoke()
     {
@@ -42,6 +47,7 @@ public partial class AppRoot
         }
         if (session.Battle is { } battle)
         {
+            if (WaitForBattleSmokePresentation(battle)) return;
             if (battle.Phase == BattlePhase.PartySelection)
             {
                 if (!PressBattleButton("确认出战")) return;
@@ -98,6 +104,21 @@ public partial class AppRoot
         _ = FinishSmokeAsync(success, success
             ? "Battle 0 completed through party selection and tactical input; settled its actual result and resumed the same scene event."
             : $"Battle flow failed: same={same}, bag={bagSame}, resumed={resumed}, settled={settled}, moves={_battleMoves}, attacks={_battleAttacks}.");
+    }
+
+    private bool WaitForBattleSmokePresentation(BattleSession battle)
+    {
+        if (battle.Presentation is not { } frame) return false;
+        _battlePresentationStages.Add(frame.Stage);
+        if (!ReferenceEquals(_observedPresentationBattle, battle) || _observedPresentationToken != frame.Token)
+        {
+            _observedPresentationBattle = battle; _observedPresentationToken = frame.Token;
+            _battlePresentationFrames++;
+        }
+        if (frame.ActorSprite is { } actor) _battlePresentationSprites.Add($"{actor.Bank}:{actor.Frame}");
+        foreach (var effect in frame.Effects) _battlePresentationSprites.Add($"{effect.Bank}:{effect.Frame}");
+        if (frame.WaitingForConfirmation && PressBattleButton("继续")) _battleItemConfirmations++;
+        return true;
     }
 
     private bool PressBattleButton(string text)

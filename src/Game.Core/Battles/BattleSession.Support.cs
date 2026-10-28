@@ -9,7 +9,7 @@ public sealed record BattleSupportResult(BattleSupportAction Action, int ActorSl
 public sealed partial class BattleSession
 {
     public BattleSupportResult? LastSupportResult { get; private set; }
-    public bool CanUseSupport(BattleSupportAction action) => CurrentActor is { } actor && BattleSupportRules.CanUse(actor.Role, action);
+    public bool CanUseSupport(BattleSupportAction action) => !IsPresenting && CurrentActor is { } actor && BattleSupportRules.CanUse(actor.Role, action);
     public int SupportRange(BattleSupportAction action) => CurrentActor is { } actor ? BattleSupportRules.Range(actor.Role, action) : 0;
 
     /// <summary>
@@ -17,8 +17,11 @@ public sealed partial class BattleSession
     /// permits confirming an empty/wrong-side cell and pays the action's common finish cost.
     /// </summary>
     public bool CanTargetSupport(BattleSupportAction action, GridPosition target)
+        => TargetSupportInRange(action, target, enforceMenu: true);
+
+    private bool TargetSupportInRange(BattleSupportAction action, GridPosition target, bool enforceMenu)
     {
-        if (!BattlefieldDefinition.Contains(target) || !CanUseSupport(action)) return false;
+        if (IsPresenting || CurrentActor is null || !BattlefieldDefinition.Contains(target) || enforceMenu && !CanUseSupport(action)) return false;
         var actor = CurrentActor!; var range = SupportRange(action);
         var distances = BattlePathing.Distances(Battlefield, Combatants, actor.Position, targeting: true, maximum: range);
         return distances.TryGetValue(target, out var distance) && distance <= range;
@@ -27,12 +30,17 @@ public sealed partial class BattleSession
     public bool Detox(GridPosition target) => ApplySupport(BattleSupportAction.Detox, target);
     public bool Medicine(GridPosition target) => ApplySupport(BattleSupportAction.Medicine, target);
 
-    private bool ApplySupport(BattleSupportAction action, GridPosition position)
+    internal bool ApplyAiSupport(BattleSupportAction action, GridPosition target) =>
+        CurrentActor is { IsFriendly: false } && ApplySupport(action, target, automatic: true);
+
+    private bool ApplySupport(BattleSupportAction action, GridPosition position, bool automatic = false)
     {
-        if (!CanTargetSupport(action, position)) return Fail("Support action is unavailable or the target is outside its targeting path range.");
+        if (!TargetSupportInRange(action, position, enforceMenu: !automatic)) return Fail("Support action is unavailable or the target is outside its targeting path range.");
         var actor = CurrentActor!; var patient = OccupantAt(position); var amount = 0; int? hitSlot = null;
+        var before = CaptureCombatantSnapshots(); var actorSlot = actor.Slot;
         try
         {
+            ValidateSupportPresentation(actor, action);
             var matchingSide = patient is not null && (action == BattleSupportAction.UsePoison
                 ? patient.IsFriendly != actor.IsFriendly : patient.IsFriendly == actor.IsFriendly);
             if (matchingSide)
@@ -56,6 +64,7 @@ public sealed partial class BattleSession
             LastSupportResult = new(action, actor.Slot, hitSlot, position, BattleAttackRules.Word(amount));
             actor.RewardExperience = BattleAttackRules.Word(actor.RewardExperience + 1);
             actor.Role.Set(RoleWords.PhysicalPower, BattleSupportRules.FinishPhysicalPower(actor.PhysicalPower));
+            QueueSupportPresentation(before, actorSlot, LastSupportResult);
             EndAction(); LastError = null; return true;
         }
         catch (Exception error) when (error is ArgumentException or InvalidOperationException or OverflowException)

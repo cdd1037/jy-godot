@@ -27,7 +27,7 @@ public sealed partial class GameSession
         var resources = BattleResources ?? throw new InvalidOperationException("Battle resources are unavailable.");
         var definition = resources.Definitions[battleId];
         var candidate = new BattleSession(definition, resources.Fields[definition.BattlefieldId], Party!, resources.Magics,
-            resources.Items, initialCostScale: _battleHpCostScale, random: Events!.DrawRandom, inventory: this);
+            resources.Items, initialCostScale: _battleHpCostScale, random: Events!.DrawRandom, inventory: this, presentActions: true);
         _battleExperienceFlag = experienceFlag;
         Battle = candidate; LastBattleOutcome = null;
         LastBattleSettlement = null;
@@ -36,7 +36,7 @@ public sealed partial class GameSession
 
     public bool FinishBattle()
     {
-        if (Battle is not { Outcome: not BattleOutcome.Ongoing } battle || Events?.PendingBattle is not { } pending) return false;
+        if (Battle is not { Outcome: not BattleOutcome.Ongoing, IsPresenting: false } battle || Events?.PendingBattle is not { } pending) return false;
         // Settlement is performed before consuming the continuation, so repeating
         // an old UI confirmation cannot pay rewards twice or choose a branch.
         SettleBattle(battle, _battleExperienceFlag);

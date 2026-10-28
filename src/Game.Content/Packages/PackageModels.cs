@@ -46,6 +46,11 @@ public sealed record SceneDocument
     public SpriteAsset[] Portraits { get; init; } = [];
     public Dictionary<int, string> PortraitNames { get; init; } = [];
     public Dictionary<int, string> Sounds { get; init; } = [];
+    // Runtime-only views over the central catalog. FIGHT IDs are local to each
+    // head bank and must never be merged into the battlefield sprite dictionary.
+    [JsonIgnore]
+    public IReadOnlyDictionary<string, SpriteAsset[]> BattleSpriteBanks { get; init; } =
+        new Dictionary<string, SpriteAsset[]>();
 }
 
 public sealed record EventCommandDocument(int Id, EventOperation Operation, int[] Arguments, int SourceOpcode = -1,

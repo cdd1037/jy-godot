@@ -201,7 +201,9 @@ public partial class AppRoot
 
     private void ResetBattleHostAfterLoad()
     {
+        StopBattleAudio(releaseCachedStreams: true);
         _shownBattle = null; _shownBattleActor = null; _shownBattlePhase = null; _battleReturnView = null;
+        _shownBattlePresenting = false; _shownBattleConfirmation = null;
         _battleUiError = null; _battleInputMode = BattleInputMode.None;
         _battleControls.Hide();
         foreach (var control in _explorationControls) control.Show();

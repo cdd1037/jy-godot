@@ -323,6 +323,7 @@ public partial class AppRoot : Control
         _audio.Stop();
         _dialogue.Present(null);
         _world.LoadPackage(package);
+        ResetBattleHostAfterLoad();
         GetViewport().GuiGetFocusOwner()?.ReleaseFocus();
         _package = package;
         _sceneNumber.Value = package.Document.LegacySceneId;
@@ -348,7 +349,11 @@ public partial class AppRoot : Control
         var facing = new[] { "东北", "东南", "西北", "西南" }[(int)player.Facing];
         _coordinates.Text = $"坐标  {player.Position.X}, {player.Position.Y}   /   {facing}";
         if (session.Battle is { } battle)
-            _coordinates.Text = battle.CurrentActor is { } actor ? $"战场坐标  {actor.Position.X}, {actor.Position.Y}" : "战场 · 64 × 64";
+        {
+            var actor = battle.CurrentActor;
+            var position = battle.Presentation?.Combatants.FirstOrDefault(person => person.Slot == actor?.Slot)?.Position ?? actor?.Position;
+            _coordinates.Text = position is { } cell ? $"战场坐标  {cell.X}, {cell.Y}" : "战场 · 64 × 64";
+        }
         var location = session.IsWorld ? "世界地图 · 480 × 480" : $"场景 {session.World.CurrentSceneId:D3} · 64 × 64";
         _details.Text = $"已行走 {player.Steps} 格\n{location}\n行囊 {session.Inventory.Count} 种物品";
     }
@@ -377,7 +382,13 @@ public partial class AppRoot : Control
 
     public override void _UnhandledKeyInput(InputEvent input)
     {
-        if (input is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape } && _battleInputMode != BattleInputMode.None)
+        if (input is InputEventKey { Pressed: true, Echo: false } &&
+            _world.Session?.Battle is { Presentation: { WaitingForConfirmation: true } frame } battle)
+        {
+            ConfirmBattlePresentation(battle, frame.Token);
+            GetViewport().SetInputAsHandled();
+        }
+        else if (input is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape } && _battleInputMode != BattleInputMode.None)
         {
             _battleInputMode = BattleInputMode.None; _world.BattleMovePreview = false;
             if (_battleActionHint is not null) _battleActionHint.Text = "已取消目标选取。";
@@ -459,6 +470,7 @@ public partial class AppRoot : Control
         _controlsHint.Text = session.Battle is not null ? "鼠标选择行动与目标 · 滚轮缩放" : "WASD 行走 · E / 空格 交互 · Enter 继续 · 滚轮缩放";
         _bagButton.Disabled = _busy || !session.CanSave || _world.IsMoving || _package?.Story is null;
         UpdateSaveButtons();
+        if (session.Battle is { } battle) PlayBattlePresentationSounds(battle);
         var pending = session.Events?.Pending;
         _dialogue.Present(pending, pending is null ? null : _world.Portrait(pending.PortraitId),
             pending is null ? null : _package?.Document.PortraitNames.GetValueOrDefault(pending.PortraitId));
@@ -474,6 +486,8 @@ public partial class AppRoot : Control
             _playedSounds.Add(soundId);
         }
         if (session.PendingLifecycle is not null) _status.Text = "请载入存档或退出游戏。";
+        else if (session.Battle?.Presentation is { WaitingForConfirmation: true }) _status.Text = "按任意键或点击继续，关闭药效面板。";
+        else if (session.Battle?.IsPresenting == true) _status.Text = "正在行动……";
         else if (session.Battle is not null) _status.Text = "选择行动后点击战场格子；战斗结束后按返回继续剧情。";
         else if (session.PendingTravel is not null) _status.Text = "正在前往下一处……";
         else if (session.IsInputLocked && !session.IsEventRunning) _status.Text = "正在进入场景……";
@@ -686,6 +700,10 @@ public partial class AppRoot : Control
             saveChecks = _saveChecks,
             itemActionChecks = _itemActionChecks,
             battleChecks = _battleChecks, battleMoves = _battleMoves, battleAttacks = _battleAttacks,
+            battlePresentationFrames = _battlePresentationFrames,
+            battlePresentationStages = _battlePresentationStages.Select(stage => stage.ToString()),
+            battlePresentationSprites = _battlePresentationSprites,
+            battleItemConfirmations = _battleItemConfirmations, playedBattleSounds = _playedBattleSounds,
             battleOutcome = _world.Session?.LastBattleOutcome,
             variables = _world.Session?.Variables, inventory = _world.Session?.Inventory,
             eventTrace = _world.Session?.Events?.Trace
@@ -701,6 +719,7 @@ public partial class AppRoot : Control
 
     public override void _ExitTree()
     {
+        StopBattleAudio(releaseCachedStreams: true);
         _audio.Stop();
         _audio.Stream = null;
         foreach (var stream in _audioStreams) stream.Dispose();

@@ -18,18 +18,21 @@ public sealed partial class BattleSession
 
     public IReadOnlyList<int> AvailableBattleItems()
     {
-        if (CurrentActor is not { } actor) return [];
+        if (IsPresenting || CurrentActor is not { } actor) return [];
         IEnumerable<int> ids = actor.IsFriendly ? _battleInventory?.Items.Where(pair => pair.Value > 0).Select(pair => pair.Key) ?? [] :
             Enumerable.Range(0, RoleWords.TakingItemCount).Where(slot => actor.Role[RoleWords.TakingCountBegin + slot] > 0)
                 .Select(slot => actor.Role[RoleWords.TakingItemBegin + slot]);
         return ids.Where(id => _items.TryGetValue(id, out var item) && item[ItemWords.ItemType] is 3 or 4).Distinct().ToArray();
     }
-    private bool ConsumeBattleItem(BattleCombatant actor, int itemId)
+    private bool HasCarriedItem(BattleCombatant actor, int itemId) => !actor.IsFriendly &&
+        Enumerable.Range(0, RoleWords.TakingItemCount).Any(slot => actor.Role[RoleWords.TakingItemBegin + slot] == itemId);
+
+    private bool ConsumeBattleItem(BattleCombatant actor, int itemId, bool automatic = false)
     {
         if (actor.IsFriendly) return _battleInventory?.TryConsume(itemId, 1) == true;
         for (var slot = 0; slot < RoleWords.TakingItemCount; slot++)
         {
-            if (actor.Role[RoleWords.TakingItemBegin + slot] != itemId || actor.Role[RoleWords.TakingCountBegin + slot] <= 0) continue;
+            if (actor.Role[RoleWords.TakingItemBegin + slot] != itemId || !automatic && actor.Role[RoleWords.TakingCountBegin + slot] <= 0) continue;
             var remaining = BattleAttackRules.Word(actor.Role[RoleWords.TakingCountBegin + slot] - 1);
             if (remaining > 0) actor.Role.Set(RoleWords.TakingCountBegin + slot, remaining);
             else
@@ -46,26 +49,36 @@ public sealed partial class BattleSession
         }
         return false;
     }
-    public bool UseBattleItem(int itemId)
+    public bool UseBattleItem(int itemId) => ApplyBattleItem(itemId, automatic: false);
+    internal bool UseAiBattleItem(int itemId) => ApplyBattleItem(itemId, automatic: true);
+
+    private bool ApplyBattleItem(int itemId, bool automatic)
     {
-        if (CurrentActor is not { } actor || !AvailableBattleItems().Contains(itemId) || _items[itemId][ItemWords.ItemType] != 3)
+        if (IsPresenting || CurrentActor is not { } actor || !_items.TryGetValue(itemId, out var item) || item[ItemWords.ItemType] != 3 ||
+            (automatic ? !HasCarriedItem(actor, itemId) : !AvailableBattleItems().Contains(itemId)))
             return Fail("This medicine is not available to the active fighter.");
         try
         {
+            var before = CaptureCombatantSnapshots(); var actorSlot = actor.Slot;
             var result = ItemUseRules.Calculate(actor.Role, actor.Role, _items[itemId], _random);
             // Manual no-effect medicine still ends the action without consuming;
             // DOS enemy AI always consumes its carried source, including no-effect.
-            if ((result.HasEffect || !actor.IsFriendly) && !ConsumeBattleItem(actor, itemId)) return Fail("Medicine source is no longer available.");
+            if ((result.HasEffect || !actor.IsFriendly) && !ConsumeBattleItem(actor, itemId, automatic)) return Fail("Medicine source is no longer available.");
             ItemUseRules.Apply(actor.Role, result);
-            LastItemUse = result; LastThrownEffectId = null; LastDamage = []; EndAction(); LastError = null; return true;
+            LastItemUse = result; LastThrownEffectId = null; LastDamage = [];
+            QueueItemPresentation(before, actorSlot, result); EndAction(); LastError = null; return true;
         }
         catch (Exception error) when (error is ArgumentException or InvalidOperationException or OverflowException)
         { return Fail(error.Message); }
     }
     public bool CanTargetThrownItem(int itemId, GridPosition target)
+        => TargetThrownItemInRange(itemId, target, automatic: false);
+
+    private bool TargetThrownItemInRange(int itemId, GridPosition target, bool automatic)
     {
-        if (CurrentActor is not { } actor || !BattlefieldDefinition.Contains(target) ||
-            !AvailableBattleItems().Contains(itemId) || _items[itemId][ItemWords.ItemType] != 4 ||
+        if (IsPresenting || CurrentActor is not { } actor || !BattlefieldDefinition.Contains(target) ||
+            !_items.TryGetValue(itemId, out var item) || item[ItemWords.ItemType] != 4 ||
+            (automatic ? !HasCarriedItem(actor, itemId) : !AvailableBattleItems().Contains(itemId)) ||
             OccupantAt(target) is not { IsAlive: true } victim || victim.IsFriendly == actor.IsFriendly) return false;
         var range = actor.Role[RoleWords.HiddenWeapon] / 15 + 1;
         if (range < 0) return false;
@@ -74,13 +87,19 @@ public sealed partial class BattleSession
     }
     /// <summary>
     /// Historical DOS sub_3A30B (manual) and sub_3598C (enemy AI), not current
-    /// OpenLegend NG+ throwing_skill amplification/poison overflow. Synchronous
-    /// numeric commit only: EFT/damage frame timing remains a presentation task.
+    /// OpenLegend NG+ throwing_skill amplification/poison overflow. Numeric state
+    /// commits once; the optional presentation queue retains before/after views.
     /// </summary>
-    public bool ThrowItem(int itemId, GridPosition target)
+    public bool ThrowItem(int itemId, GridPosition target) => ApplyThrownItem(itemId, target, automatic: false);
+    internal bool ThrowAiItem(int itemId, GridPosition target) => ApplyThrownItem(itemId, target, automatic: true);
+
+    private bool ApplyThrownItem(int itemId, GridPosition target, bool automatic)
     {
-        if (!CanTargetThrownItem(itemId, target) || CurrentActor is not { } actor) return Fail("Thrown-item target or inventory is unavailable.");
+        if (!TargetThrownItemInRange(itemId, target, automatic) || CurrentActor is not { } actor) return Fail("Thrown-item target or inventory is unavailable.");
         var victim = OccupantAt(target)!; var role = victim.Role; var item = _items[itemId];
+        try { ValidateThrownItemPresentation(item); }
+        catch (ArgumentException error) { return Fail(error.Message); }
+        var before = CaptureCombatantSnapshots(); var actorSlot = actor.Slot;
         // Negative hurt follows an undefined stale-register branch in DOS;
         // negative maximum HP is outside the supported clamping domain. The
         // historical machine audit explicitly treats these as safety adaptation.
@@ -107,10 +126,11 @@ public sealed partial class BattleSession
         else poisonDelta = poison >= 0 ? poison : (poison - actor.Role[RoleWords.HiddenWeapon]) / 2;
         var nextPoison = Math.Clamp(BattleAttackRules.Word(role[RoleWords.Poison] + poisonDelta), 0, 99);
         var damage = BattleAttackRules.Word(Math.Abs(BattleAttackRules.Word(nextHp - role[RoleWords.Hp])));
-        if (!ConsumeBattleItem(actor, itemId)) return Fail("Thrown-item source is no longer available.");
+        if (!ConsumeBattleItem(actor, itemId, automatic)) return Fail("Thrown-item source is no longer available.");
         if (actor.IsFriendly) actor.Facing = BattleMagicRules.Facing(actor.Position, target);
         role.Set(RoleWords.Hp, nextHp); role.Set(RoleWords.Hurt, nextHurt); role.Set(RoleWords.Poison, nextPoison);
         LastItemUse = null; LastThrownEffectId = item[ItemWords.HiddenWeaponEffectId];
-        LastDamage = [new(actor.Slot, victim.Slot, target, damage, false)]; EndAction(); LastError = null; return true;
+        LastDamage = [new(actor.Slot, victim.Slot, target, damage, false)];
+        QueueThrownItemPresentation(before, actorSlot, itemId, target); EndAction(); LastError = null; return true;
     }
 }
