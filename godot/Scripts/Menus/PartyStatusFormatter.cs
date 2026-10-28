@@ -9,7 +9,7 @@ public static class PartyStatusFormatter
     public static string Build(GameSession session, int roleId)
     {
         ArgumentNullException.ThrowIfNull(session);
-        if (session.Party?.Roles.TryGetValue(roleId, out var role) != true) return "人物资料不可用。";
+        if (session.Party is not { } party || !party.Roles.TryGetValue(roleId, out var role)) return "人物资料不可用。";
         string ItemName(int id)
         {
             if (id < 0) return "无";

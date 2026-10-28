@@ -206,7 +206,7 @@ public sealed class InventoryController : IDisposable
 
     private string DescribeRole(GameSession session)
     {
-        if (_roleId is not { } id || session.Party?.Roles.TryGetValue(id, out var role) != true) return "当前没有可选择的队员。";
+        if (_roleId is not { } id || session.Party is not { } party || !party.Roles.TryGetValue(id, out var role)) return "当前没有可选择的队员。";
         return $"{role.Name}\n生命 {role[RoleWords.Hp]}/{role[RoleWords.MaximumHp]} · 内力 {role[RoleWords.Mp]}/{role[RoleWords.MaximumMp]}\n" +
             $"装备：{ItemName(session, role[RoleWords.EquipmentBegin])} / {ItemName(session, role[RoleWords.EquipmentBegin + 1])}\n" +
             $"修炼：{ItemName(session, role[RoleWords.PracticeItem])}";

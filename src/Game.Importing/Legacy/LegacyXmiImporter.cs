@@ -127,6 +127,10 @@ public static class LegacyXmiImporter
             }
             else throw new NotSupportedException($"XMIDI system event 0x{status:X2} cannot be sent as a MIDI short message.");
         }
+        // Original GAME02/03/etc include the word-alignment zero inside EVNT's
+        // declared length. Accept only that single padding byte after EOT;
+        // executable or arbitrary trailing bytes remain malformed.
+        if (ended && (cursor & 1) != 0 && cursor + 1 == bytes.Length && bytes[cursor] == 0) cursor++;
         if (!ended || cursor != bytes.Length) throw new InvalidDataException("XMIDI EVNT must end at its end-of-track event.");
         return events;
     }
