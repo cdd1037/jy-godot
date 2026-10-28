@@ -52,7 +52,7 @@ public sealed class GameSessionBattleTests
         return new(1, commands);
     }
     private static GameSession Session(EventProgram? program = null, bool defeat = false, bool resources = true,
-        bool progression = true)
+        bool progression = true, bool medicine = false)
     {
         var party = new PartyDefinition(defeat ? [Role(0, 0, 10, 15), Role(1, 500, 100, 60)] :
             [Role(0, 500, 100, 60), Role(1, 0, 10, 30)], [0, -1, -1, -1, -1, -1]);
@@ -68,8 +68,9 @@ public sealed class GameSessionBattleTests
         // Large synthetic thresholds keep these action/RNG tests below a level-up.
         var rules = progression ? new ProgressionDefinition(Enumerable.Range(0, 30).Select(i => i * 1000).ToArray(),
             999, 999, 110, 1, 1, 2, 4, 5) : null;
+        var itemWords = new int[ItemWords.Count]; itemWords[ItemWords.ItemType] = 3; itemWords[ItemWords.AddHp] = 20;
         var catalog = resources ? new BattleCatalog([Definition()], [new BattlefieldDefinition(0, new short[8192])],
-            [Magic()], [], party, rules) : null;
+            [Magic()], medicine ? [new ItemDefinition(0, "Fixture medicine", itemWords)] : [], party, rules) : null;
         return new(worldScene.ToSceneDefinition(new(19, 20)), story, battles: catalog);
     }
     private static BattleSession Start(GameSession session)
@@ -84,6 +85,31 @@ public sealed class GameSessionBattleTests
         Assert.IsTrue(battle.CurrentActor!.IsFriendly);
         Assert.IsTrue(battle.AttackMagic(0, battle.Combatants.Single(actor => !actor.IsFriendly).Position), battle.LastError);
         Assert.AreEqual(BattleOutcome.Victory, battle.Outcome);
+    }
+
+    [TestMethod]
+    public void BattleMedicineConsumesTheActualSessionBackpackBeforeStoryResumes()
+    {
+        var session = Session(medicine: true); var party = session.Party!; var events = session.Events!;
+        var battle = Start(session); Assert.IsTrue(battle.ConfirmParty([]));
+        for (var remaining = 1; remaining >= 0; remaining--)
+        {
+            Assert.IsTrue(battle.CurrentActor!.IsFriendly);
+            party.SetWord(0, RoleWords.Hp, 50);
+            Assert.IsTrue(battle.UseBattleItem(0), battle.LastError);
+            Assert.AreEqual(remaining, session.Inventory.GetValueOrDefault(0));
+            Assert.AreEqual(remaining > 0, ((IEventWorld)session).ItemExists(0));
+            Assert.AreSame(party.Roles[0], battle.Combatants.Single(actor => actor.IsFriendly).Role);
+            Assert.IsTrue(party.GetWord(0, RoleWords.Hp) > 50);
+            Assert.IsTrue(battle.StepEnemy(), battle.LastError);
+        }
+        Assert.IsTrue(battle.AttackMagic(0, new(11, 10)), battle.LastError);
+        Assert.AreEqual(BattleOutcome.Victory, battle.Outcome); Assert.IsTrue(session.FinishBattle());
+        Assert.AreSame(events, session.Events); Assert.AreEqual(1, session.Inventory[0]); // Only the actual post-battle reward.
+        Assert.AreNotEqual(1u, events.CaptureIdleState().RandomState);
+        var snapshot = session.CaptureSnapshot();
+        var restored = GameSession.Restore(session.Definition, session.Story, snapshot, battles: session.BattleResources);
+        Assert.AreEqual(1, restored.Inventory[0]); Assert.AreEqual(party.GetWord(0, RoleWords.Hp), restored.Party!.GetWord(0, RoleWords.Hp));
     }
 
     [TestMethod]

@@ -27,7 +27,7 @@ public sealed partial class GameSession
         var resources = BattleResources ?? throw new InvalidOperationException("Battle resources are unavailable.");
         var definition = resources.Definitions[battleId];
         var candidate = new BattleSession(definition, resources.Fields[definition.BattlefieldId], Party!, resources.Magics,
-            resources.Items, initialCostScale: _battleHpCostScale, random: Events!.DrawRandom);
+            resources.Items, initialCostScale: _battleHpCostScale, random: Events!.DrawRandom, inventory: this);
         _battleExperienceFlag = experienceFlag;
         Battle = candidate; LastBattleOutcome = null;
         LastBattleSettlement = null;

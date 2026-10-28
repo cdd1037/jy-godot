@@ -67,6 +67,7 @@ public partial class AppRoot : Control
         _eventSmoke = args.Contains("--event-smoke");
         _travelSmoke = args.Contains("--travel-smoke");
         _battleSmoke = args.Contains("--battle-smoke");
+        _itemActionsSmoke = args.Contains("--item-actions-smoke");
         _saveSmoke = args.Contains("--save-smoke");
         _savesDirectory = Option("--saves-directory") ?? ProjectSettings.GlobalizePath("user://saves");
         _world.PlayOpening = args.Contains("--play-opening");
@@ -376,7 +377,13 @@ public partial class AppRoot : Control
 
     public override void _UnhandledKeyInput(InputEvent input)
     {
-        if (input is InputEventKey { Pressed: true, Echo: false, Keycode: Key.F1 })
+        if (input is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape } && _battleInputMode != BattleInputMode.None)
+        {
+            _battleInputMode = BattleInputMode.None; _world.BattleMovePreview = false;
+            if (_battleActionHint is not null) _battleActionHint.Text = "已取消目标选取。";
+            _world.QueueRedraw(); GetViewport().SetInputAsHandled();
+        }
+        else if (input is InputEventKey { Pressed: true, Echo: false, Keycode: Key.F1 })
         {
             _world.ShowCollision = !_world.ShowCollision;
             _world.QueueRedraw();
@@ -450,7 +457,7 @@ public partial class AppRoot : Control
         if (_world.Session is not { } session) return;
         UpdateSceneInfo();
         _controlsHint.Text = session.Battle is not null ? "鼠标选择行动与目标 · 滚轮缩放" : "WASD 行走 · E / 空格 交互 · Enter 继续 · 滚轮缩放";
-        _bagButton.Disabled = _busy || session.IsInputLocked || _package?.Story is null;
+        _bagButton.Disabled = _busy || !session.CanSave || _world.IsMoving || _package?.Story is null;
         UpdateSaveButtons();
         var pending = session.Events?.Pending;
         _dialogue.Present(pending, pending is null ? null : _world.Portrait(pending.PortraitId),
@@ -487,46 +494,6 @@ public partial class AppRoot : Control
         }
     }
 
-    private void ShowInventory()
-    {
-        if (_world.Session is not { } session || session.IsInputLocked || _package?.Story is not { } story || _inventoryDialog is not null) return;
-        var dialog = new AcceptDialog
-        {
-            Title = "行囊"
-        };
-        _inventoryDialog = dialog;
-        void CloseInventory()
-        {
-            if (_inventoryDialog != dialog) return;
-            _modalClosedFrame = Engine.GetProcessFrames();
-            _inventoryDialog = null;
-            dialog.QueueFree();
-        }
-        dialog.Confirmed += CloseInventory;
-        dialog.Canceled += CloseInventory;
-        var column = new VBoxContainer { Name = "InventoryContents" };
-        var items = new ItemList { Name = "InventoryItems", CustomMinimumSize = new Vector2(380, 240) };
-        var entries = session.Inventory.OrderBy(pair => pair.Key).ToArray();
-        foreach (var pair in entries) items.AddItem($"{story.ItemNames.GetValueOrDefault(pair.Key, $"物品 {pair.Key}")}  × {pair.Value}");
-        column.AddChild(items);
-        var use = new Button { Name = "UseItem", Text = "对面前的物件使用", Disabled = true };
-        items.ItemSelected += _ => use.Disabled = session.IsWorld;
-        use.Pressed += () =>
-        {
-            if (_inventoryDialog != dialog) return;
-            var selected = items.GetSelectedItems();
-            if (selected.Length == 0) return;
-            var item = entries[selected[0]].Key;
-            CloseInventory();
-            session.UseItem(item);
-            BindStory(); UpdateSceneInfo(); _world.QueueRedraw();
-        };
-        column.AddChild(use);
-        dialog.AddChild(column);
-        AddChild(dialog);
-        dialog.PopupCentered(new Vector2I(420, 320));
-    }
-
     private void AdvanceSmoke()
     {
         if (System.Environment.TickCount64 - _smokeStarted > 45000)
@@ -545,6 +512,7 @@ public partial class AppRoot : Control
         }
         if (_world.Session.Events?.Error is { } eventError) { _ = FinishSmokeAsync(false, eventError); return; }
         if (_saveSmoke) { AdvanceSaveSmoke(); return; }
+        if (_itemActionsSmoke) { AdvanceItemActionsSmoke(); return; }
         if (_travelSmoke) { AdvanceTravelSmoke(); return; }
         if (_battleSmoke) { AdvanceBattleSmoke(); return; }
         if (_eventSmoke) { AdvanceEventSmoke(); return; }
@@ -716,6 +684,7 @@ public partial class AppRoot : Control
             , eventChoiceChecks = _eventSmokeChoiceChecks, inventoryUseChecks = _eventSmokeInventoryChecks,
             travelChecks = _travelChecks,
             saveChecks = _saveChecks,
+            itemActionChecks = _itemActionChecks,
             battleChecks = _battleChecks, battleMoves = _battleMoves, battleAttacks = _battleAttacks,
             battleOutcome = _world.Session?.LastBattleOutcome,
             variables = _world.Session?.Variables, inventory = _world.Session?.Inventory,

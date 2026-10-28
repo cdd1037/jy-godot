@@ -31,7 +31,7 @@
 
 已接入主角家的开场、娃娃交谈、8 个箱子、床的休息流程，以及选择、任务变量、物品使用、队伍、人物属性、武功和跨场景数据修改。库中集中保留人物、初始背包、全局脚本和对白、地图事件、共享图像及来源资源缓存。
 
-统一事件执行器有 **55 种标准命令**。原版 68 个编号中 **62 个已有转换**；已知原版 KDEF 中 **998/1,018 段完整编译通过**。这些数字分别表示内部接口与编译兼容，不代表完整剧情运行验收。世界地图、场景进出、剧情镜头、行走和双对象动画已接入。战斗已有出战选择、移动、武功、有限敌方行动、胜败及经验/升级/修炼/制作结算；完整 AI、道具与医疗等动作、战斗动画/声音仍待补齐。三槽存读档和死亡后的载入已接入；音乐播放、商店、结局和世界恢复/天气尚未完成。
+统一事件执行器有 **55 种标准命令**。原版 68 个编号中 **62 个已有转换**；已知原版 KDEF 中 **998/1,018 段完整编译通过**。这些数字分别表示内部接口与编译兼容，不代表完整剧情运行验收。世界地图、场景进出、剧情镜头、行走和双对象动画已接入。战斗已有出战选择、移动、武功、用毒、解毒、医疗、药品、暗器、有限敌方行动、胜败及经验/升级/修炼/制作结算；完整 AI 和战斗动画/声音仍待补齐。背包支持选队员装备、练功和服药。三槽存读档和死亡后的载入已接入；音乐播放、商店、结局和世界恢复/天气尚未完成。
 
 独立编写的任务样例直接叠加到本机基础库，不复制图片或生成新场景包：
 
@@ -48,7 +48,8 @@
 
 - 方向键 / WASD：行走；默认约 60ms 一格，长按首步后等待 500ms 再连续行走。
 - E / 空格 / Enter：交互及确认对话；↑↓ 选择，允许取消时按 Esc。
-- 查看背包：查看物品，并对面前物件使用；脚本决定是否消耗。
+- 查看背包：选物品及队员，装备、练功或服药；剧情物品仍可对面前物件使用。修炼转移及特殊秘籍会先要求确认。
+- 战斗：侧栏选择行动与物品，点击地图目标；医疗/解毒可点自己，Esc 取消目标选取。
 - 保存进度 / 载入进度：三个存档槽，覆盖前确认。自由行动且移动完成后可保存，死亡后可载入；存档与资源库分开存放。
 - F2：切换平滑插值与直接换格，两者移动规则和节奏相同。
 - F1：碰撞辅助；鼠标滚轮：缩放。
@@ -63,10 +64,11 @@ dotnet tools/Game.Tools/bin/Debug/net10.0/Game.Tools.dll audit-events --source '
 .\run.ps1 -Smoke -TravelSmoke -Headless -Report .local/verification/travel.json
 .\run.ps1 -Smoke -BattleDemo -BattleSmoke -Headless -Report .local/verification/battle.json
 .\run.ps1 -Smoke -EventDemo -SaveSmoke -Headless -Report .local/verification/saves.json
+.\run.ps1 -Smoke -BattleDemo -ItemActionsSmoke -Headless -Report .local/verification/items.json
 ```
 
 `build.ps1` 构建解决方案并运行测试。合成夹具由测试独立编写，不含原作资源。真实资源测试通过 `JINYONG_ORIGINAL_DATA` 或本地 `.local/original-data.txt` 指定来源；缺少原版数据时相应测试明确标记为不可用。完整开场冒烟加 `-PlayOpening`，任务样例冒烟加 `-EventDemo`；画面截图需正常渲染模式，使用 `-Capture` 指定输出。
 
 源码、文档与独立示例纳入版本控制；`content/base/`、旧导入包、`.local/`、Godot 缓存和构建产物不提交。原作资源及其解码结果不分发，项目当前未提供源码许可声明。
 
-参阅 [工程结构](docs/project-layout.md)、[中央资源库](docs/resource-library.md)、[存读档](docs/persistence.md)、[世界旅行](docs/world-travel.md)、[战斗](docs/battles.md)、[架构](docs/architecture.md)、[事件编写](docs/event-authoring.md)、[指令兼容](docs/original-opcode-coverage.md)、[验证记录](docs/verification.md) 和 [参与开发](CONTRIBUTING.md)。
+参阅 [工程结构](docs/project-layout.md)、[中央资源库](docs/resource-library.md)、[物品与修炼](docs/items.md)、[存读档](docs/persistence.md)、[世界旅行](docs/world-travel.md)、[战斗](docs/battles.md)、[架构](docs/architecture.md)、[事件编写](docs/event-authoring.md)、[指令兼容](docs/original-opcode-coverage.md)、[验证记录](docs/verification.md) 和 [参与开发](CONTRIBUTING.md)。

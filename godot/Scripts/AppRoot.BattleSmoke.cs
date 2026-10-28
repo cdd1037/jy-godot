@@ -23,7 +23,7 @@ public partial class AppRoot
         if (_battleMouseDown)
         {
             Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = false,
-                Position = _world.GlobalPosition + _world.Size / 2 });
+                Position = SmokeMousePosition(_world.GlobalPosition + _world.Size / 2) });
             _battleMouseDown = false;
             return;
         }
@@ -111,9 +111,13 @@ public partial class AppRoot
     private void SendBattleMouse(GridPosition cell)
     {
         Input.ParseInputEvent(new InputEventMouseButton { ButtonIndex = MouseButton.Left, Pressed = true,
-            Position = _world.GlobalPosition + _world.BattleCellScreenPosition(cell) });
+            Position = SmokeMousePosition(_world.GlobalPosition + _world.BattleCellScreenPosition(cell)) });
         _battleMouseDown = true;
     }
+
+    // ParseInputEvent expects window/embedder coordinates. Popup creation can
+    // change headless stretch; passing viewport coordinates would scale twice.
+    private Vector2 SmokeMousePosition(Vector2 viewportPosition) => GetViewport().GetFinalTransform() * viewportPosition;
 
     private async Task CaptureBattleAsync()
     {

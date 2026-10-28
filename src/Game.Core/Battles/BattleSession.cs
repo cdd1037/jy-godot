@@ -10,7 +10,7 @@ namespace JinYong.Core.Battles;
 /// Friendly state is shared; enemy baselines are isolated from the party. No
 /// pre-battle party healing, invented normal attack, or automatic victory.
 /// </summary>
-public sealed class BattleSession
+public sealed partial class BattleSession
 {
     public const int Capacity = 26;
     public const string AiPolicyDescription = "Nearest opponent, first affordable learned magic, path movement, then native rest; advanced DOS AI selectors are not yet implemented.";
@@ -20,6 +20,7 @@ public sealed class BattleSession
     private readonly List<BattleCombatant> _combatants = [];
     private readonly Dictionary<int, RoleState> _enemies = [];
     private readonly Func<int, int> _random;
+    private readonly IBattleInventory? _battleInventory;
     private readonly HashSet<int> _mandatory = [];
     private readonly int[] _occupancy = Enumerable.Repeat(-1, 4096).ToArray();
     private int _actor;
@@ -28,11 +29,12 @@ public sealed class BattleSession
 
     public BattleSession(BattleDefinition definition, BattlefieldDefinition battlefield, PartyState party,
         IReadOnlyDictionary<int, MagicDefinition> magics, IReadOnlyDictionary<int, ItemDefinition>? items = null,
-        uint randomSeed = 1, int initialCostScale = 0, Func<int, int>? random = null)
+        uint randomSeed = 1, int initialCostScale = 0, Func<int, int>? random = null, IBattleInventory? inventory = null)
     {
         if (definition.BattlefieldId != battlefield.Id) throw new ArgumentException("Battlefield ID does not match the battle definition.");
         Definition = definition; Battlefield = battlefield; _party = party; _magics = magics;
         _items = items ?? new Dictionary<int, ItemDefinition>();
+        _battleInventory = inventory;
         _randomState = randomSeed;
         _random = bound =>
         {
