@@ -87,7 +87,7 @@ public static class LegacyEventCompiler
                 61 => EventOperation.BranchBooks, 65 => EventOperation.MoveShop,
                 13 or 14 => EventOperation.Fade,
                 25 => EventOperation.PanCamera, 30 => EventOperation.ScriptedWalk, 44 => EventOperation.AnimatePair,
-                6 => EventOperation.Battle,
+                6 => EventOperation.Battle, 15 => EventOperation.Death, 24 => EventOperation.LoadMenu,
                 _ => throw new NotSupportedException($"KDEF {id}, word {pc}: opcode {opcode} is not implemented.")
             };
             if (opcode == 51) arguments = [2547, 18, 114, 0];
@@ -137,7 +137,10 @@ public static class LegacyEventCompiler
                 var targets = choices is null ? arguments.TakeLast(2) : choices.Select(choice => choice.Target);
                 foreach (var target in targets) pending.Enqueue(target);
             }
-            else if (operation is not EventOperation.Stop) pending.Enqueue(pc + width);
+            // 15/24 transfer ownership to the outer load/quit lifecycle. Their
+            // menus never return to the following instruction on success, and
+            // declining exit or a failed load stays in the menu.
+            else if (operation is not (EventOperation.Stop or EventOperation.Death or EventOperation.LoadMenu)) pending.Enqueue(pc + width);
         }
         var result = new EventProgramDocument(id, commands.OrderBy(command => command.Id).ToArray());
         try { _ = new EventProgram(id, result.Commands.Select(command => new EventCommand(command.Id, command.Operation,

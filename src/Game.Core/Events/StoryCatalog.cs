@@ -12,7 +12,8 @@ public enum EventOperation
     JoinParty, LeaveParty, RestParty, ClearPartyMp, SetRoleAttribute, AddRoleAttribute,
     BranchRole, LearnMagic, SetMagic, RoleAddItem, NoticeRole, BranchParty, BranchPartyFull,
     BranchPartyFemale, DismissParty, AddFame, IncrementEventScripts, ReplaceTiles, OpenScene,
-    OpenAllScenes, BranchBooks, MoveShop, BranchItemExists, Fade, PanCamera, ScriptedWalk, AnimatePair, Battle
+    OpenAllScenes, BranchBooks, MoveShop, BranchItemExists, Fade, PanCamera, ScriptedWalk, AnimatePair, Battle,
+    Death, LoadMenu
 }
 public enum EventComparison { Equal, NotEqual, Less, LessOrEqual, Greater, GreaterOrEqual }
 public sealed record EventChoice(string Text, int Target);
@@ -30,13 +31,13 @@ public sealed class EventCommand
         {
             EventOperation.Refresh or EventOperation.End or EventOperation.Return or EventOperation.Stop or
                 EventOperation.RestParty or EventOperation.ClearPartyMp or EventOperation.DismissParty or
-                EventOperation.OpenAllScenes or EventOperation.MoveShop => 0,
+                EventOperation.OpenAllScenes or EventOperation.MoveShop or EventOperation.LoadMenu => 0,
             EventOperation.Dialogue or EventOperation.Animate or EventOperation.SetRoleAttribute or
                 EventOperation.AddRoleAttribute or EventOperation.LearnMagic or EventOperation.RoleAddItem or
                 EventOperation.BranchParty or EventOperation.BranchItemExists => 3,
             EventOperation.ChangeEvent => 13,
             EventOperation.Face or EventOperation.Sound or EventOperation.Jump or EventOperation.Call or EventOperation.Wait or EventOperation.Choice or
-                EventOperation.JoinParty or EventOperation.LeaveParty or EventOperation.AddFame or EventOperation.OpenScene => 1,
+                EventOperation.JoinParty or EventOperation.LeaveParty or EventOperation.AddFame or EventOperation.OpenScene or EventOperation.Death => 1,
             EventOperation.AddItem or EventOperation.AdjustItem or EventOperation.SetVariable or EventOperation.AddVariable or EventOperation.Teleport or
                 EventOperation.NoticeRole or EventOperation.BranchPartyFull or EventOperation.BranchPartyFemale or EventOperation.BranchBooks or EventOperation.Fade => 2,
             EventOperation.BranchUsedItem => 3,
@@ -65,6 +66,8 @@ public sealed class EventCommand
             throw new ArgumentException("Invalid facing direction.");
         if (operation == EventOperation.Battle && (_arguments[0] < 0 || _arguments[3] is < short.MinValue or > short.MaxValue))
             throw new ArgumentException("Battle needs a nonnegative definition ID and a signed reward flag.");
+        if (operation == EventOperation.Death && _arguments[0] is < short.MinValue or > short.MaxValue)
+            throw new ArgumentException("Death preserves one signed source word; the original callee ignores it.");
         if (operation == EventOperation.BranchVariable && !Enum.IsDefined((EventComparison)_arguments[1]))
             throw new ArgumentException("Invalid variable comparison.");
         if (operation == EventOperation.BranchItem && _arguments[1] < 0) throw new ArgumentException("Negative required item count.");
@@ -102,7 +105,7 @@ public sealed class EventProgram
         if (id < 0) throw new ArgumentException("Program IDs must be nonnegative.");
         Id = id;
         Commands = Array.AsReadOnly(commands.ToArray());
-        if (Commands.Count == 0 || Commands[^1].Operation is not (EventOperation.End or EventOperation.Return or EventOperation.Stop))
+        if (Commands.Count == 0 || Commands[^1].Operation is not (EventOperation.End or EventOperation.Return or EventOperation.Stop or EventOperation.Death or EventOperation.LoadMenu))
             throw new ArgumentException($"Program {id} must end explicitly.");
         if (Commands.Select(command => command.Id).Distinct().Count() != Commands.Count)
             throw new ArgumentException($"Program {id} has duplicate command IDs.");

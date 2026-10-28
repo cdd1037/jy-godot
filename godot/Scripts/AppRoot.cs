@@ -67,6 +67,8 @@ public partial class AppRoot : Control
         _eventSmoke = args.Contains("--event-smoke");
         _travelSmoke = args.Contains("--travel-smoke");
         _battleSmoke = args.Contains("--battle-smoke");
+        _saveSmoke = args.Contains("--save-smoke");
+        _savesDirectory = Option("--saves-directory") ?? ProjectSettings.GlobalizePath("user://saves");
         _world.PlayOpening = args.Contains("--play-opening");
         _smoothMovement.ButtonPressed = !args.Contains("--grid-movement");
         _smokeStarted = System.Environment.TickCount64;
@@ -78,6 +80,7 @@ public partial class AppRoot : Control
         {
             if (Option("--scene") is { } number) _sceneNumber.Value = int.Parse(number);
             if (Option("--story-overlay") is { } overlay) _storyOverlay = ContentJson.Read<StoryDocument>(Path.GetFullPath(overlay));
+            if (_saveSmoke) PrepareSaveSmokeOverlay();
             if ((Option("--library") ?? Option("--package")) is { } package) await OpenPackageAsync(package);
             else if (Option("--source") is { } source) await ImportAsync(source);
             else if (!_smoke)
@@ -205,6 +208,7 @@ public partial class AppRoot : Control
         _bagButton = new Button { Text = "查看背包", CustomMinimumSize = new Vector2(0, 34), FocusMode = FocusModeEnum.None };
         _bagButton.Pressed += ShowInventory;
         side.AddChild(_bagButton);
+        BuildSaveButtons(side);
         var collision = new CheckButton { Text = "显示碰撞辅助", FocusMode = FocusModeEnum.None };
         collision.Toggled += value => { _world.ShowCollision = value; _world.QueueRedraw(); };
         side.AddChild(collision);
@@ -230,6 +234,7 @@ public partial class AppRoot : Control
             catch (Exception error) { await ShowFailureAsync(error); }
         };
         AddChild(_folder);
+        BuildSaveMenu();
     }
 
     private static StyleBoxFlat Box(string color, int radius)
@@ -389,6 +394,7 @@ public partial class AppRoot : Control
         _world.Advance(delta);
         AdvanceBattleHost(delta);
         CompletePendingTravel();
+        PresentLifecycleMenu();
         BindStory();
         if (_smoke && !_finishing) AdvanceSmoke();
         _heldDirections.RemoveAll(direction => !Input.IsActionPressed(ActionName(direction)));
@@ -396,7 +402,7 @@ public partial class AppRoot : Control
             if ((Input.IsActionPressed(ActionName(direction)) || Input.IsActionJustPressed(ActionName(direction))) &&
                 !_heldDirections.Contains(direction)) _heldDirections.Add(direction);
         var typing = GetViewport().GuiGetFocusOwner() is LineEdit;
-        var canWalk = !_finishing && !_busy && !typing && !_folder.Visible && _inventoryDialog?.Visible != true && _modalClosedFrame != Engine.GetProcessFrames();
+        var canWalk = !_finishing && !_busy && !typing && !_folder.Visible && !SaveMenuVisible && _inventoryDialog?.Visible != true && _modalClosedFrame != Engine.GetProcessFrames();
         if (canWalk)
         {
             if (_world.Session?.IsEventRunning == true)
@@ -445,6 +451,7 @@ public partial class AppRoot : Control
         UpdateSceneInfo();
         _controlsHint.Text = session.Battle is not null ? "鼠标选择行动与目标 · 滚轮缩放" : "WASD 行走 · E / 空格 交互 · Enter 继续 · 滚轮缩放";
         _bagButton.Disabled = _busy || session.IsInputLocked || _package?.Story is null;
+        UpdateSaveButtons();
         var pending = session.Events?.Pending;
         _dialogue.Present(pending, pending is null ? null : _world.Portrait(pending.PortraitId),
             pending is null ? null : _package?.Document.PortraitNames.GetValueOrDefault(pending.PortraitId));
@@ -459,7 +466,8 @@ public partial class AppRoot : Control
             _audio.Play();
             _playedSounds.Add(soundId);
         }
-        if (session.Battle is not null) _status.Text = "选择行动后点击战场格子；战斗结束后按返回继续剧情。";
+        if (session.PendingLifecycle is not null) _status.Text = "请载入存档或退出游戏。";
+        else if (session.Battle is not null) _status.Text = "选择行动后点击战场格子；战斗结束后按返回继续剧情。";
         else if (session.PendingTravel is not null) _status.Text = "正在前往下一处……";
         else if (session.IsInputLocked && !session.IsEventRunning) _status.Text = "正在进入场景……";
         else if (session.IsEventRunning) _status.Text = pending?.Kind == EventPresentationKind.Choice ? "选择一项继续剧情。" : pending is null ? "……" : "空格 / Enter 继续对话";
@@ -536,6 +544,7 @@ public partial class AppRoot : Control
             return;
         }
         if (_world.Session.Events?.Error is { } eventError) { _ = FinishSmokeAsync(false, eventError); return; }
+        if (_saveSmoke) { AdvanceSaveSmoke(); return; }
         if (_travelSmoke) { AdvanceTravelSmoke(); return; }
         if (_battleSmoke) { AdvanceBattleSmoke(); return; }
         if (_eventSmoke) { AdvanceEventSmoke(); return; }
@@ -706,6 +715,7 @@ public partial class AppRoot : Control
             , quickTapChecks = _smokeQuickTapChecks, smoothMovement = _world.SmoothMovement, playOpening = _world.PlayOpening
             , eventChoiceChecks = _eventSmokeChoiceChecks, inventoryUseChecks = _eventSmokeInventoryChecks,
             travelChecks = _travelChecks,
+            saveChecks = _saveChecks,
             battleChecks = _battleChecks, battleMoves = _battleMoves, battleAttacks = _battleAttacks,
             battleOutcome = _world.Session?.LastBattleOutcome,
             variables = _world.Session?.Variables, inventory = _world.Session?.Inventory,

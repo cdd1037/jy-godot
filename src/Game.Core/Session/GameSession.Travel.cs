@@ -18,7 +18,7 @@ public sealed partial class GameSession
     public bool IsWorld { get; private set; }
     public TravelRequest? PendingTravel { get; private set; }
     public bool IsTravelReady => PendingTravel is not null && _travelElapsed >= TravelFadeTime;
-    public bool IsInputLocked => IsEventRunning || Battle is not null || PendingTravel is not null || _fadingIn;
+    public bool IsInputLocked => IsRetired || IsEventRunning || Battle is not null || PendingTravel is not null || _fadingIn;
     public int ShipPicture => new[] { 7430,7438,7446,7454 }[(int)(Travel?.Snapshot.ShipFacing ?? Direction.Up)] + _shipFrameOffset;
     private int WorldPlayerPicture => new[] { 5002,5016,5030,5044 }[(int)Travel!.Snapshot.Facing] + _walkFrameOffset;
 
@@ -26,6 +26,7 @@ public sealed partial class GameSession
     public void Advance(TimeSpan elapsed)
     {
         if (elapsed < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(elapsed));
+        if (IsRetired) return;
         if (PendingTravel is not null)
         {
             _travelElapsed = elapsed >= TravelFadeTime - _travelElapsed ? TravelFadeTime : _travelElapsed + elapsed;

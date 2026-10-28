@@ -75,7 +75,7 @@ public sealed class WorldDefinition
 /// GameSession; other scenes are copied lazily. This is not a scene renderer or world-map runtime.
 /// Opcode semantics reference OpenLegend src/scene/scene.cpp cases 26, 38, 39, 54, 59, 61, 65.
 /// </summary>
-public sealed class SceneWorldState
+public sealed partial class SceneWorldState
 {
     private readonly WorldDefinition? _definition;
     private readonly Dictionary<int, SceneRuntimeState> _scenes = [];

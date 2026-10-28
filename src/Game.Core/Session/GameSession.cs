@@ -26,19 +26,20 @@ public sealed partial class GameSession : IEventWorld
     private readonly StoryCatalog? _story;
 
     public GameSession(SceneDefinition scene, StoryCatalog? story = null, bool skipOpening = false,
-        WorldMapDefinition? worldMap = null, WorldTravelSnapshot? travelStart = null, BattleCatalog? battles = null)
+        WorldMapDefinition? worldMap = null, WorldTravelSnapshot? travelStart = null, BattleCatalog? battles = null,
+        bool startInitialProgram = true, int? sceneIdOverride = null, bool validateSpawn = true)
     {
         Definition = scene;
         Scene = new SceneRuntimeState(scene);
         _story = story;
-        World = new SceneWorldState(story?.SceneId ?? 0, Scene, story?.World);
+        World = new SceneWorldState(sceneIdOverride ?? story?.SceneId ?? 0, Scene, story?.World);
         Party = story?.Party is { } party ? new PartyState(party) : null;
         MainMap = worldMap;
         BattleResources = battles;
         Travel = worldMap is not null && travelStart is not null ? new WorldTravelState(travelStart) : null;
         _position = scene.Spawn;
         var block = SceneMovementRules.Check(scene, _position, _position);
-        if (block != MovementBlock.None)
+        if (validateSpawn && block != MovementBlock.None)
             throw new ArgumentException($"Spawn {scene.Spawn} is blocked ({block}). Specify another spawn.");
         if (story is not null)
         {
@@ -47,7 +48,7 @@ public sealed partial class GameSession : IEventWorld
             _facing = story.InitialFacing;
             _picture = story.InitialPicture;
             Events = new EventRunner(story, this);
-            if (story.InitialProgramId is { } initial)
+            if (startInitialProgram && story.InitialProgramId is { } initial)
             {
                 if (!Events.TryStart(initial, story.InitialEventIndex, scene.Spawn))
                     throw new InvalidOperationException(Events.Error ?? "Initial event cannot start.");
@@ -63,6 +64,8 @@ public sealed partial class GameSession : IEventWorld
         var events = Events!;
         for (var budget = 0; events.IsRunning && events.Error is null && budget < 10000; budget++)
         {
+            if (events.PendingLifecycle is not null)
+                throw new InvalidOperationException("Testing startup cannot replace a session through a death/load request. Use -PlayOpening for this content.");
             if (events.Pending?.Kind == EventPresentationKind.Choice)
                 throw new InvalidOperationException("Testing startup cannot choose a story branch. Use -PlayOpening for this content.");
             if (events.Pending is { } pending) events.Confirm(pending.Token);

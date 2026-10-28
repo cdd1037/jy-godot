@@ -95,6 +95,8 @@ public sealed class GameSessionBattleTests
         ((IEventWorld)session).SetVariable(0, 9);
         world.SetTile(0, MapLayer.Building, new(12, 12), 100); world.SetEventField(0, 5, 0, 1);
         var battle = Start(session); var token = events!.PendingBattle!.Token;
+        Assert.IsFalse(session.CanSave);
+        Assert.ThrowsExactly<InvalidOperationException>(() => session.CaptureSnapshot());
         Assert.IsFalse(session.FinishBattle()); Assert.IsFalse(events.Confirm(token));
         Assert.IsFalse(events.ResumeBattle(token)); Assert.IsFalse(events.ResumeBattle(token + 1));
         Assert.AreEqual(MovementBlock.Story, session.TryMove(Direction.Right).Block);
@@ -204,5 +206,20 @@ public sealed class GameSessionBattleTests
         Assert.AreEqual(0, second.LastDamage.Count); Assert.AreEqual(3, second.HpCostScale);
         Assert.AreEqual(92, session.Party!.GetWord(0, RoleWords.Mp));
         Assert.AreEqual(BattleOutcome.Ongoing, second.Outcome); Assert.IsFalse(session.FinishBattle());
+    }
+
+    [TestMethod]
+    public void ExplorationCheckpointKeepsTheCrossBattleCostScaleAndRandomStream()
+    {
+        var source = Session(); HeroWins(Start(source)); Assert.IsTrue(source.FinishBattle());
+        var snapshot = source.CaptureSnapshot(); Assert.AreEqual(3, snapshot.HpCostScale);
+        var restored = GameSession.Restore(source.Definition, source.Story, snapshot, battles: source.BattleResources);
+        var originalBattle = Start(source); var restoredBattle = Start(restored);
+        Assert.AreEqual(3, restoredBattle.HpCostScale);
+        Assert.IsTrue(originalBattle.ConfirmParty([])); Assert.IsTrue(restoredBattle.ConfirmParty([]));
+        Assert.IsTrue(originalBattle.AttackMagic(0, new(10, 11))); Assert.IsTrue(restoredBattle.AttackMagic(0, new(10, 11)));
+        Assert.AreEqual(92, restored.Party!.GetWord(0, RoleWords.Mp));
+        Assert.AreEqual(source.Party!.GetWord(0, RoleWords.MagicLevelBegin), restored.Party.GetWord(0, RoleWords.MagicLevelBegin));
+        Assert.AreEqual(originalBattle.HpCostScale, restoredBattle.HpCostScale);
     }
 }

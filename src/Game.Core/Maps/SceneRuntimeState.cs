@@ -2,7 +2,7 @@ using System.Collections.ObjectModel;
 
 namespace JinYong.Core.Maps;
 
-public sealed class SceneRuntimeState : ISceneMap
+public sealed partial class SceneRuntimeState : ISceneMap
 {
     private readonly SceneDefinition _definition;
     private readonly SceneEventDefinition[] _events;

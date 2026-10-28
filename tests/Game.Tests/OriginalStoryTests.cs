@@ -23,7 +23,7 @@ public sealed class OriginalStoryTests
         CollectionAssert.AreEquivalent(library.Manifest.FileHashes.Keys.ToArray(), package.Manifest.FileHashes.Keys.ToArray());
         Assert.AreEqual(691, package.Story!.InitialProgramId);
         Assert.AreEqual(66, package.Story.Programs[691].Commands.Count);
-        Assert.AreEqual(910, package.Story.Programs.Count);
+        Assert.AreEqual(998, package.Story.Programs.Count);
         Assert.IsTrue(package.Story.Dialogues.Count > 47);
         Assert.IsTrue(package.Document.Sprites.Length > 3000);
         Assert.AreEqual(320, package.Story.Party!.Roles.Count);

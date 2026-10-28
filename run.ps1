@@ -13,6 +13,7 @@ param(
     [switch]$BattleDemo,
     [switch]$BattleSmoke,
     [switch]$TravelSmoke,
+    [switch]$SaveSmoke,
     [string]$StoryOverlay
 )
 $ErrorActionPreference = "Stop"
@@ -30,6 +31,9 @@ if ($BattleDemo) {
     $StoryOverlay = Join-Path $PSScriptRoot "content/examples/battle-demo.json"
 }
 if ($BattleSmoke -and (-not $Smoke -or -not $BattleDemo -or $TravelSmoke)) { throw "-BattleSmoke requires -Smoke -BattleDemo and no -TravelSmoke." }
+if ($SaveSmoke -and (-not $Smoke -or -not $EventDemo -or $TravelSmoke -or $BattleSmoke -or $PlayOpening)) {
+    throw "-SaveSmoke requires -Smoke -EventDemo and no other smoke mode or -PlayOpening."
+}
 if ($Package -and $Source) { throw "Use either -Library/-Package or -Source." }
 if ($TravelSmoke -and (-not $Smoke -or $EventDemo -or $Scene -ne 70)) { throw "-TravelSmoke requires -Smoke, scene 70, and no -EventDemo." }
 $arguments = @("--path", (Join-Path $PSScriptRoot "godot"))
@@ -46,6 +50,7 @@ if ($PlayOpening) { $arguments += "--play-opening" }
 if ($EventDemo -and $Smoke) { $arguments += "--event-smoke" }
 if ($TravelSmoke) { $arguments += "--travel-smoke" }
 if ($BattleSmoke) { $arguments += "--battle-smoke" }
+if ($SaveSmoke) { $arguments += @("--save-smoke", "--saves-directory", (Join-Path $PSScriptRoot ".local\saves-smoke-$([Guid]::NewGuid().ToString('N'))")) }
 if ($Capture) { $arguments += @("--capture", [IO.Path]::GetFullPath($Capture)) }
 if ($Report) { $arguments += @("--report", [IO.Path]::GetFullPath($Report)) }
 & $Godot @arguments

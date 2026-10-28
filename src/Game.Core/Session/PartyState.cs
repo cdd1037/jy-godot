@@ -93,7 +93,7 @@ public sealed record PartyJoinResult(bool Joined, IReadOnlyList<PartyItemTransfe
 /// Deliberate normalization: duplicate/full joins have no side effects; arithmetic is
 /// checked 32-bit instead of DOS signed-word wrap. No new-game-plus attribute rules.
 /// </summary>
-public sealed class PartyState
+public sealed partial class PartyState
 {
     public const int Capacity = 6;
     private readonly int[] _members;

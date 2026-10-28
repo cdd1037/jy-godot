@@ -1,4 +1,5 @@
 using JinYong.Core.Maps;
+using JinYong.Core.Persistence;
 
 namespace JinYong.Core.Events;
 
@@ -35,6 +36,12 @@ public sealed record EventPresentation(long Token, EventPresentationKind Kind, i
     int PortraitId, int Style, string Text, int Page, int PageCount, IReadOnlyList<EventChoice>? Choices = null, bool CanCancel = false);
 public sealed record EventTrace(int Program, int Command, EventOperation Operation);
 public sealed record EventBattleRequest(long Token, int BattleId, int ExperienceFlag);
+public enum EventLifecycleKind { Death, LoadMenu }
+/// <summary>
+/// A terminal handoff to the host's three-slot load/quit menu, not a dialogue or
+/// a resumable instruction. DOS opcode15 ignores SourceArgument (normally83).
+/// </summary>
+public sealed record EventLifecycleRequest(long Token, EventLifecycleKind Kind, int SourceArgument = -1);
 
 public sealed class EventRunner
 {
@@ -69,6 +76,8 @@ public sealed class EventRunner
     private TimeSpan _sceneWait;
     private EventCommand? _battleCommand;
     public EventBattleRequest? PendingBattle { get; private set; }
+    public EventLifecycleRequest? PendingLifecycle { get; private set; }
+    public bool IsRetired { get; private set; }
 
     public EventRunner(StoryCatalog catalog, IEventWorld world, uint randomSeed = 1)
     {
@@ -76,7 +85,7 @@ public sealed class EventRunner
         _world = world;
         _random = randomSeed;
     }
-    public bool IsRunning => _program is not null || Pending is not null;
+    public bool IsRunning => _program is not null || Pending is not null || PendingLifecycle is not null;
     public int? ProgramId => _program?.Id;
     public EventPresentation? Pending { get; private set; }
     public string? Error { get; private set; }
@@ -85,9 +94,43 @@ public sealed class EventRunner
     public IReadOnlyList<EventTrace> Trace => _trace.ToArray();
     internal int DrawRandom(int bound) => bound <= 1 || bound > 30000 ? 0 : RandomBounded(bound);
 
+    public bool CanCaptureIdleState => !IsRetired && !IsRunning && PendingBattle is null &&
+        !_animating && !_refresh && !_fading && _wait is null && _sceneOperation is null && _calls.Count == 0;
+
+    public EventRunnerIdleSnapshot CaptureIdleState()
+    {
+        if (!CanCaptureIdleState) throw new InvalidOperationException("Only an idle event runner can be saved.");
+        if (_token < 0 || _token == long.MaxValue) throw new InvalidOperationException("Event token is outside the restorable range.");
+        return new(_random, _token, Array.AsReadOnly(_completed.ToArray()));
+    }
+
+    public void RestoreIdleState(EventRunnerIdleSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        if (!CanCaptureIdleState) throw new InvalidOperationException("An active or retired event runner cannot restore idle state.");
+        ArgumentNullException.ThrowIfNull(snapshot.CompletedPrograms);
+        if (snapshot.Token < 0 || snapshot.Token == long.MaxValue)
+            throw new ArgumentException("Event snapshot token must be nonnegative and below Int64.MaxValue.");
+        var completed = snapshot.CompletedPrograms.ToArray();
+        if (completed.Any(id => id < 0 || !_catalog.Programs.ContainsKey(id)))
+            throw new ArgumentException("Event snapshot references an unknown completed program.");
+        _random = snapshot.RandomState; _token = snapshot.Token;
+        _completed.Clear(); _completed.AddRange(completed);
+        Error = null; _trace.Clear(); _sounds.Clear(); _dialogue = null;
+        ClearTimedState();
+    }
+
+    /// <summary>Destroy the old VM only after a replacement session has committed.</summary>
+    public void Retire()
+    {
+        if (IsRetired) return;
+        ClearTimedState(); _program = null; _calls.Clear(); Pending = null; _dialogue = null;
+        _sounds.Clear(); _trace.Clear(); Error = null; IsRetired = true;
+    }
+
     public bool TryStart(int programId, int eventContext, GridPosition trigger, int usedItem = -1)
     {
-        if (IsRunning || !_catalog.Programs.TryGetValue(programId, out var program)) return false;
+        if (IsRetired || IsRunning || !_catalog.Programs.TryGetValue(programId, out var program)) return false;
         Error = null;
         try
         {
@@ -164,7 +207,7 @@ public sealed class EventRunner
     public void Advance(TimeSpan elapsed)
     {
         if (elapsed < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(elapsed));
-        if (Pending is not null || PendingBattle is not null || _program is null) return;
+        if (IsRetired || Pending is not null || PendingBattle is not null || PendingLifecycle is not null || _program is null) return;
         if (_sceneOperation is not null)
         {
             try
@@ -322,6 +365,15 @@ public sealed class EventRunner
                         _battleCommand = command;
                         PendingBattle = new(++_token, arguments[0], arguments[3]);
                         return;
+                    case EventOperation.Death:
+                    case EventOperation.LoadMenu:
+                        // sub_2E659 reads no talk parameter. Both menus can only
+                        // load a replacement game or quit; failed/cancelled host
+                        // I/O must retain this request and the frozen old VM.
+                        PendingLifecycle = new(++_token, command.Operation == EventOperation.Death
+                            ? EventLifecycleKind.Death : EventLifecycleKind.LoadMenu,
+                            command.Operation == EventOperation.Death ? arguments[0] : -1);
+                        return;
                     case EventOperation.PanCamera:
                     case EventOperation.ScriptedWalk:
                         _sceneOperation = command.Operation; _sceneCommand = command;
@@ -406,6 +458,7 @@ public sealed class EventRunner
         _animating = _refresh = _fading = false;
         _wait = null; _fadeCommand = null;
         PendingBattle = null; _battleCommand = null;
+        PendingLifecycle = null;
         _fadeElapsed = _fadeDuration = TimeSpan.Zero;
     }
 
