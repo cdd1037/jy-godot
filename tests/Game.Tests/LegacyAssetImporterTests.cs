@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text.Json;
-using JinYong.Content.Legacy;
+using JinYong.Importing.Legacy;
 using JinYong.Content.Library;
 using JinYong.Content.Packages;
 using Microsoft.VisualStudio.TestTools.UnitTesting;

@@ -1,6 +1,6 @@
 using System.Buffers.Binary;
 using System.Security.Cryptography;
-using JinYong.Content.Legacy;
+using JinYong.Importing.Legacy;
 using JinYong.Content.Library;
 using JinYong.Content.Packages;
 using JinYong.Core.Events;

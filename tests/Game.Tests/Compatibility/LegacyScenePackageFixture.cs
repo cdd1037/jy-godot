@@ -1,3 +1,4 @@
+using JinYong.Importing.Imaging;
 using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text;
@@ -5,7 +6,7 @@ using JinYong.Content.Packages;
 using JinYong.Core.Maps;
 using JinYong.Core.Session;
 
-namespace JinYong.Content.Legacy;
+namespace JinYong.Importing.Legacy;
 
 internal sealed record ImportOptions(string SourceDirectory, string OutputDirectory, int SceneId = 70, GridPosition? Spawn = null,
     bool IncludeStory = false);

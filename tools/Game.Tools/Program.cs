@@ -1,4 +1,5 @@
-using JinYong.Content.Legacy;
+using JinYong.Importing;
+using JinYong.Importing.Legacy;
 using JinYong.Content.Library;
 using JinYong.Content.Packages;
 using System.Text.Json;

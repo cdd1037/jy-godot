@@ -44,7 +44,3 @@ public sealed record LibraryAudio
     public Dictionary<int, string> Music { get; init; } = [];
 }
 
-public sealed record LibraryImportOptions(string SourceDirectory, string OutputDirectory,
-    bool IncludeStory = true, Legacy.LegacyScriptDialect ScriptDialect = Legacy.LegacyScriptDialect.DosOriginal);
-public sealed record LibraryImportReport(string LibraryDirectory, int Scenes, int SpriteBanks, int UniqueSprites,
-    int Programs, int UnavailablePrograms, int SourceResources);

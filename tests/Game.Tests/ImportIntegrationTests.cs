@@ -1,5 +1,5 @@
 using System.Security.Cryptography;
-using JinYong.Content.Legacy;
+using JinYong.Importing.Legacy;
 using JinYong.Content.Packages;
 using JinYong.Core.Maps;
 using JinYong.Core.Session;

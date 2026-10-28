@@ -1,4 +1,4 @@
-using JinYong.Content.Legacy;
+using JinYong.Importing.Legacy;
 using JinYong.Core.Maps;
 using JinYong.Core.Session;
 using Microsoft.VisualStudio.TestTools.UnitTesting;

@@ -1,5 +1,5 @@
 using System.Text.Json;
-using JinYong.Content.Legacy;
+using JinYong.Importing.Legacy;
 using JinYong.Content.Packages;
 using JinYong.Core.Events;
 using JinYong.Core.Maps;

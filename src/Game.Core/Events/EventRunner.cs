@@ -1,83 +1,20 @@
 using JinYong.Core.Maps;
-using JinYong.Core.Persistence;
 
 namespace JinYong.Core.Events;
 
-public interface IEventWorld
+public sealed partial class EventRunner
 {
-    void ChangeEvent(int context, GridPosition trigger, IReadOnlyList<int> arguments);
-    void Face(Direction direction);
-    void SetPicture(int eventIndex, int picture);
-    void AddItem(int id, int count);
-    int ItemCount(int id);
-    int GetVariable(int id);
-    void SetVariable(int id, int value);
-    int EventField(int context, IReadOnlyList<int> arguments);
-    void SetTile(IReadOnlyList<int> arguments);
-    void Teleport(GridPosition position);
-    void ValidateCommand(EventCommand command, int context);
-    bool ItemExists(int id) => ItemCount(id) > 0;
-    bool TestGameCondition(EventCommand command) => throw new InvalidOperationException("Game state service is unavailable.");
-    string? ExecuteGameCommand(EventCommand command, int context, GridPosition trigger, int randomValue) =>
-        throw new InvalidOperationException("Game state service is unavailable.");
-    void SetFade(double opacity) => throw new InvalidOperationException("Fade presentation service is unavailable.");
-    void SetCameraAxis(bool horizontal, int coordinate) => throw new InvalidOperationException("Scene camera service is unavailable.");
-    void BeginScriptedStep(Direction direction) => throw new InvalidOperationException("Scripted movement service is unavailable.");
-    void UpdateScriptedMotion(double progress) => throw new InvalidOperationException("Scripted movement service is unavailable.");
-    void EndScriptedWalk() => throw new InvalidOperationException("Scripted movement service is unavailable.");
-    void CancelScriptedMotion() { }
-    void SetPictureWrapped(int eventIndex, int picture) => SetPicture(eventIndex, unchecked((short)picture));
-    void BeginBattle(int battleId, int experienceFlag) => throw new InvalidOperationException("Battle service is unavailable.");
-    bool TryGetBattleOutcome(out bool victory) { victory = false; return false; }
-}
-
-public enum EventPresentationKind { Dialogue, Item, Error, Choice, Notice }
-public sealed record EventPresentation(long Token, EventPresentationKind Kind, int DialogueId,
-    int PortraitId, int Style, string Text, int Page, int PageCount, IReadOnlyList<EventChoice>? Choices = null, bool CanCancel = false);
-public sealed record EventTrace(int Program, int Command, EventOperation Operation);
-public sealed record EventBattleRequest(long Token, int BattleId, int ExperienceFlag);
-public enum EventLifecycleKind { Death, LoadMenu }
-/// <summary>
-/// A terminal handoff to the host's three-slot load/quit menu, not a dialogue or
-/// a resumable instruction. DOS opcode15 ignores SourceArgument (normally83).
-/// </summary>
-public sealed record EventLifecycleRequest(long Token, EventLifecycleKind Kind, int SourceArgument = -1);
-
-public sealed class EventRunner
-{
-    // OpenLegend's picture animation waits two BIOS ticks for each even frame.
-    public static readonly TimeSpan AnimationFrameTime = TimeSpan.FromSeconds(2.0 * 65536 / 1193182);
-    public static readonly TimeSpan ScriptedWalkFrameTime = TimeSpan.FromSeconds(3.0 * 65536 / 1193182);
     private readonly StoryCatalog _catalog;
     private readonly IEventWorld _world;
-    private readonly Queue<int> _sounds = [];
     private readonly List<int> _completed = [];
     private EventProgram? _program;
-    private int _cursor, _context, _animationEvent, _nextFrame, _endFrame;
+    private int _cursor, _context;
     private GridPosition _trigger;
-    private bool _animating, _refresh;
-    private TimeSpan _animationWait;
     private long _token;
     private uint _random;
-    private DialogueDefinition? _dialogue;
-    private int _page, _portrait, _style;
     private readonly Stack<(EventProgram Program, int Cursor)> _calls = [];
     private readonly Queue<EventTrace> _trace = [];
-    private TimeSpan? _wait;
-    private int _usedItem = -1, _cancelTarget = -1, _executed;
-    private bool _fading;
-    private int _fadeTarget;
-    private TimeSpan _fadeElapsed, _fadeDuration;
-    private EventCommand? _fadeCommand;
-    private EventOperation? _sceneOperation;
-    private EventCommand? _sceneCommand;
-    private int _sceneX, _sceneY, _targetX, _targetY;
-    private int _pairFirstEvent, _pairFirstFrame, _pairFirstEnd, _pairSecondEvent, _pairSecondFrame;
-    private TimeSpan _sceneWait;
-    private EventCommand? _battleCommand;
-    public EventBattleRequest? PendingBattle { get; private set; }
-    public EventLifecycleRequest? PendingLifecycle { get; private set; }
-    public bool IsRetired { get; private set; }
+    private int _usedItem = -1, _executed;
 
     public EventRunner(StoryCatalog catalog, IEventWorld world, uint randomSeed = 1)
     {
@@ -87,206 +24,10 @@ public sealed class EventRunner
     }
     public bool IsRunning => _program is not null || Pending is not null || PendingLifecycle is not null;
     public int? ProgramId => _program?.Id;
-    public EventPresentation? Pending { get; private set; }
     public string? Error { get; private set; }
     public int CompletedCount => _completed.Count;
     public IReadOnlyList<int> CompletedPrograms => _completed.AsReadOnly();
     public IReadOnlyList<EventTrace> Trace => _trace.ToArray();
-    internal int DrawRandom(int bound) => bound <= 1 || bound > 30000 ? 0 : RandomBounded(bound);
-
-    public bool CanCaptureIdleState => !IsRetired && !IsRunning && PendingBattle is null &&
-        !_animating && !_refresh && !_fading && _wait is null && _sceneOperation is null && _calls.Count == 0;
-
-    public EventRunnerIdleSnapshot CaptureIdleState()
-    {
-        if (!CanCaptureIdleState) throw new InvalidOperationException("Only an idle event runner can be saved.");
-        if (_token < 0 || _token == long.MaxValue) throw new InvalidOperationException("Event token is outside the restorable range.");
-        return new(_random, _token, Array.AsReadOnly(_completed.ToArray()));
-    }
-
-    public void RestoreIdleState(EventRunnerIdleSnapshot snapshot)
-    {
-        ArgumentNullException.ThrowIfNull(snapshot);
-        if (!CanCaptureIdleState) throw new InvalidOperationException("An active or retired event runner cannot restore idle state.");
-        ArgumentNullException.ThrowIfNull(snapshot.CompletedPrograms);
-        if (snapshot.Token < 0 || snapshot.Token == long.MaxValue)
-            throw new ArgumentException("Event snapshot token must be nonnegative and below Int64.MaxValue.");
-        var completed = snapshot.CompletedPrograms.ToArray();
-        if (completed.Any(id => id < 0 || !_catalog.Programs.ContainsKey(id)))
-            throw new ArgumentException("Event snapshot references an unknown completed program.");
-        _random = snapshot.RandomState; _token = snapshot.Token;
-        _completed.Clear(); _completed.AddRange(completed);
-        Error = null; _trace.Clear(); _sounds.Clear(); _dialogue = null;
-        ClearTimedState();
-    }
-
-    /// <summary>Destroy the old VM only after a replacement session has committed.</summary>
-    public void Retire()
-    {
-        if (IsRetired) return;
-        ClearTimedState(); _program = null; _calls.Clear(); Pending = null; _dialogue = null;
-        _sounds.Clear(); _trace.Clear(); Error = null; IsRetired = true;
-    }
-
-    public bool TryStart(int programId, int eventContext, GridPosition trigger, int usedItem = -1)
-    {
-        if (IsRetired || IsRunning || !_catalog.Programs.TryGetValue(programId, out var program)) return false;
-        Error = null;
-        try
-        {
-            var visited = new HashSet<int>();
-            void Check(EventProgram candidate)
-            {
-                if (!visited.Add(candidate.Id)) return;
-                foreach (var command in candidate.Commands)
-                {
-                    try { _world.ValidateCommand(command, eventContext); }
-                    catch (Exception error) when (error is ArgumentException or InvalidOperationException or OverflowException)
-                    { throw new InvalidOperationException($"Program {candidate.Id}, command {command.Id}: {error.Message}", error); }
-                    if (command.Operation == EventOperation.Call) Check(_catalog.Programs[command.Arguments[0]]);
-                }
-            }
-            Check(program);
-        }
-        catch (Exception error) when (error is ArgumentException or InvalidOperationException or OverflowException)
-        {
-            Error = $"Program {programId} cannot start: {error.Message}";
-            return false;
-        }
-        _program = program;
-        _cursor = 0;
-        _context = eventContext;
-        _trigger = trigger;
-        _usedItem = usedItem;
-        _calls.Clear(); _trace.Clear(); ClearTimedState(); _executed = 0;
-        Pump();
-        return true;
-    }
-
-    public bool Confirm(long token)
-    {
-        if (Pending is not { } pending || pending.Token != token) return false;
-        if (pending.Kind == EventPresentationKind.Choice) return false;
-        if (pending.Kind == EventPresentationKind.Error) { Pending = null; return true; }
-        if (_dialogue is not null && ++_page < _dialogue.Pages.Count) { ShowPage(); return true; }
-        _dialogue = null;
-        Pending = null;
-        Pump();
-        return true;
-    }
-
-    public bool Choose(long token, int option)
-    {
-        if (Pending is not { Kind: EventPresentationKind.Choice, Choices: { } choices } pending || pending.Token != token ||
-            option < 0 || option >= choices.Count) return false;
-        _cursor = _program!.IndexOf(choices[option].Target);
-        Pending = null;
-        Pump();
-        return true;
-    }
-
-    public bool CancelChoice(long token)
-    {
-        if (Pending is not { Kind: EventPresentationKind.Choice, CanCancel: true } pending || pending.Token != token) return false;
-        _cursor = _program!.IndexOf(_cancelTarget);
-        Pending = null;
-        Pump();
-        return true;
-    }
-
-    /// <summary>The world owns the completed battle; a confirmation cannot choose its outcome.</summary>
-    public bool ResumeBattle(long token)
-    {
-        if (PendingBattle?.Token != token || _battleCommand is not { } command || !_world.TryGetBattleOutcome(out var victory)) return false;
-        _cursor = _program!.IndexOf(command.Arguments[victory ? 1 : 2]);
-        PendingBattle = null; _battleCommand = null;
-        Pump();
-        return true;
-    }
-
-    public void Advance(TimeSpan elapsed)
-    {
-        if (elapsed < TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(elapsed));
-        if (IsRetired || Pending is not null || PendingBattle is not null || PendingLifecycle is not null || _program is null) return;
-        if (_sceneOperation is not null)
-        {
-            try
-            {
-                _sceneWait -= elapsed;
-                UpdateScriptedProgress();
-                while (_sceneWait <= TimeSpan.Zero)
-                {
-                    var overdue = -_sceneWait;
-                    if (!NextSceneFrame())
-                    {
-                        if (!_refresh) Pump();
-                        return;
-                    }
-                    _sceneWait -= overdue;
-                    UpdateScriptedProgress();
-                }
-            }
-            catch (Exception error) when (error is ArgumentException or InvalidOperationException or OverflowException or KeyNotFoundException)
-            { Fail(error, _sceneCommand, _program?.Id); }
-            return;
-        }
-        if (_fading)
-        {
-            try
-            {
-                var fadeRemaining = _fadeDuration - _fadeElapsed;
-                _fadeElapsed = elapsed >= fadeRemaining ? _fadeDuration : _fadeElapsed + elapsed;
-                var progress = _fadeElapsed.TotalSeconds / _fadeDuration.TotalSeconds;
-                _world.SetFade(_fadeTarget == 1 ? progress : 1 - progress);
-                if (_fadeElapsed < _fadeDuration) return;
-                _fading = false; _fadeCommand = null;
-                // A subsequent fade starts here but consumes only future elapsed
-                // time, like the runner's wait and animation continuations.
-                Pump();
-            }
-            catch (Exception error) when (error is ArgumentException or InvalidOperationException or OverflowException or KeyNotFoundException)
-            { Fail(error, _fadeCommand, _program?.Id); }
-            return;
-        }
-        if (_wait is { } remaining)
-        {
-            _wait = remaining - elapsed;
-            if (_wait > TimeSpan.Zero) return;
-            _wait = null; Pump(); return;
-        }
-        if (_refresh) { _refresh = false; Pump(); return; }
-        if (!_animating) return;
-        _animationWait -= elapsed;
-        while (_animationWait <= TimeSpan.Zero)
-        {
-            if (_nextFrame > _endFrame) { _animating = false; Pump(); return; }
-            _world.SetPicture(_animationEvent, _nextFrame);
-            _nextFrame += 2;
-            _animationWait += AnimationFrameTime;
-        }
-    }
-
-    public int[] TakeSounds()
-    {
-        var result = _sounds.ToArray();
-        _sounds.Clear();
-        return result;
-    }
-
-    private void ShowPage()
-    {
-        var dialogue = _dialogue!;
-        Pending = new(++_token, EventPresentationKind.Dialogue, dialogue.Id, _portrait, _style,
-            dialogue.Pages[_page], _page + 1, dialogue.Pages.Count);
-    }
-
-    private void StartDialogue(int id, int portrait, int style)
-    {
-        _dialogue = _catalog.Dialogues.TryGetValue(id, out var dialogue) ? dialogue
-            : throw new InvalidOperationException($"Missing dialogue {id}.");
-        _page = 0; _portrait = portrait; _style = style;
-        ShowPage();
-    }
 
     private void Pump()
     {
@@ -451,73 +192,7 @@ public sealed class EventRunner
         { Fail(error, command, programId); }
     }
 
-    private void ClearTimedState()
-    {
-        if (_sceneOperation == EventOperation.ScriptedWalk) _world.CancelScriptedMotion();
-        _sceneOperation = null; _sceneCommand = null; _sceneWait = TimeSpan.Zero;
-        _animating = _refresh = _fading = false;
-        _wait = null; _fadeCommand = null;
-        PendingBattle = null; _battleCommand = null;
-        PendingLifecycle = null;
-        _fadeElapsed = _fadeDuration = TimeSpan.Zero;
-    }
-
-    private void UpdateScriptedProgress()
-    {
-        if (_sceneOperation == EventOperation.ScriptedWalk)
-            _world.UpdateScriptedMotion(Math.Clamp(1 - _sceneWait.TotalSeconds / ScriptedWalkFrameTime.TotalSeconds, 0, 1));
-    }
-
-    // One continuation inside the existing runner, not another instruction VM.
-    // References: OpenLegend Z_DAT/0x2ED8D.md, 0x2F171.md and 0x2F9F2.md.
-    private bool NextSceneFrame()
-    {
-        if (_sceneOperation == EventOperation.AnimatePair)
-        {
-            if (_pairFirstFrame > _pairFirstEnd) { _sceneOperation = null; _sceneCommand = null; return false; }
-            _world.SetPictureWrapped(_pairFirstEvent, _pairFirstFrame);
-            _world.SetPictureWrapped(_pairSecondEvent, _pairSecondFrame);
-            _pairFirstFrame += 2; _pairSecondFrame += 2;
-            _sceneWait = AnimationFrameTime;
-            return true;
-        }
-        var horizontal = _sceneX != _targetX;
-        if (!horizontal && _sceneY == _targetY)
-        {
-            if (_sceneOperation == EventOperation.ScriptedWalk)
-            {
-                _world.EndScriptedWalk();
-                _refresh = true; // Final standing present, including zero-distance walks.
-            }
-            _sceneOperation = null; _sceneCommand = null;
-            return false;
-        }
-        var step = horizontal ? Math.Sign(_targetX - _sceneX) : Math.Sign(_targetY - _sceneY);
-        if (_sceneOperation == EventOperation.PanCamera)
-        {
-            _world.SetCameraAxis(horizontal, horizontal ? _sceneX : _sceneY);
-            _sceneWait = AnimationFrameTime;
-        }
-        else
-        {
-            var direction = horizontal ? (step < 0 ? Direction.Left : Direction.Right) :
-                step < 0 ? Direction.Up : Direction.Down;
-            _world.BeginScriptedStep(direction);
-            _sceneWait = ScriptedWalkFrameTime;
-        }
-        if (horizontal) _sceneX += step; else _sceneY += step;
-        return true;
-    }
-
-    private void Fail(Exception error, EventCommand? command, int? programId)
-    {
-        Error = $"Program {_program?.Id ?? programId}, command {command?.Id}: {error.Message}";
-        _program = null; _dialogue = null; ClearTimedState(); _calls.Clear();
-        Pending = new(++_token, EventPresentationKind.Error, -1, -1, 0, "剧情无法继续：" + Error, 1, 1);
-    }
-
-    private void Branch(bool matches, IReadOnlyList<int> arguments) =>
-        _cursor = _program!.IndexOf(arguments[arguments.Count - (matches ? 2 : 1)]);
+    internal int DrawRandom(int bound) => bound <= 1 || bound > 30000 ? 0 : RandomBounded(bound);
 
     private int RandomBounded(int upperBound)
     {

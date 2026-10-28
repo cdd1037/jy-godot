@@ -1,5 +1,5 @@
 using System.Buffers.Binary;
-using JinYong.Content.Legacy;
+using JinYong.Importing.Legacy;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace JinYong.Tests;

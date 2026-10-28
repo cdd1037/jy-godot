@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../Game.Content/Game.Content.csproj" />
+    <ProjectReference Include="../Game.Core/Game.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Game.Tests" />
+  </ItemGroup>
+</Project>

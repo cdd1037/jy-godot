@@ -2,6 +2,10 @@
 
 中央 `GameLibrary` 是基础内容与 MOD 共用的读取入口。原版资源只导入一次，人物、初始背包、公共事件程序、对白和共享贴图不再随每个场景重复导出。默认库位于 `content/base/`，默认打开场景 70。
 
+生成端位于 `Game.Importing`：`JinYong.Importing.Legacy.LegacyGameImporter` 读取 DOS 原档，使用该项目中的解码器、脚本编译器与图集写入器。`LibraryImportOptions` 和 `LibraryImportReport` 位于 `JinYong.Importing`。读取端及共享格式模型留在 `Game.Content`，依赖方向为 `Game.Importing → Game.Content → Game.Core`；Content 不调用导入器。Godot 因保留导入按钮仍引用 Importing，普通库加载不经过 DOS 转换。
+
+本轮只拆出这一个项目，不改变格式 3、资源 ID、图集去重或原始映射，也未重新导入资源。战斗、事件与 MOD 不另建 csproj。
+
 ## 格式 3 布局
 
 ```text
@@ -25,6 +29,8 @@ content/base/
 ```
 
 这份文档定义目录和职责，具体 JSON 字段及二进制定位以内容层模型与读取器为准。不得让运行时通过猜测原始文件名或写死本机路径绕过索引。
+
+Content 继续负责库中的小端地图/事件/战场读取、PNG 尺寸核验、RGB6 调色板展开和路径/哈希校验。调色板公共入口为 `JinYong.Content.Imaging.VgaPalette.DecodeRgb6`；导入侧旧 `LegacySpriteDecoder.ReadPalette` 只代理它。原始 IDX/GRP 及 RLE/Big5 转换属于 Importing，不是运行时加载前提。
 
 ## 公共定义与场景视图
 
@@ -68,4 +74,4 @@ content/base/
 
 导入数量、耗时和运行验证结果应由实际报告记录，不写成格式保证。报告不得把“缓存成功”“能够解码”或“脚本编译通过”当作完整游戏运行验收。
 
-本批战斗 bank 视图、动画与音效接入未运行构建、测试或验收。既有 427 项测试属于上一版基线，不能作为本批改动已经验证的证据。
+新增战斗 bank 视图、动画与音效接入，以及本轮项目拆分和脚本移动，均未运行构建、测试或验收。既有 427 项测试属于旧版本基线，不能作为这些改动已经验证的证据。

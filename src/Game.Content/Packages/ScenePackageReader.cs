@@ -4,15 +4,10 @@ using JinYong.Core.Maps;
 using JinYong.Core.Session;
 using JinYong.Core.Events;
 using JinYong.Content.Library;
+using JinYong.Content.Imaging;
 using System.Text.Json;
 
 namespace JinYong.Content.Packages;
-
-public sealed record ScenePackage(string Directory, PackageManifest Manifest, SceneDocument Document, SceneDefinition Scene, StoryCatalog? Story = null)
-{
-    public string Resolve(string relativePath) => ScenePackageReader.Resolve(Directory, relativePath);
-    public GameLibrary? Library { get; init; }
-}
 
 public static class ScenePackageReader
 {
@@ -45,7 +40,7 @@ public static class ScenePackageReader
             throw new InvalidDataException("Unsupported scene format or scene ID.");
         RequireTracked(document.Layers);
         RequireTracked(document.Palette);
-        _ = Legacy.LegacySpriteDecoder.ReadPalette(File.ReadAllBytes(Resolve(directory, document.Palette)));
+        _ = VgaPalette.DecodeRgb6(File.ReadAllBytes(Resolve(directory, document.Palette)));
         var bytesLayers = File.ReadAllBytes(Resolve(directory, document.Layers));
         if (bytesLayers.Length != SceneDefinition.LayerCount * SceneDefinition.TileCount * 2)
             throw new InvalidDataException("Invalid scene layer byte count.");
