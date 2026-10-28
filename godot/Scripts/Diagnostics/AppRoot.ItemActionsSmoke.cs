@@ -93,7 +93,9 @@ public partial class AppRoot
             {
                 if (_itemActionStage != 13 || battle.Outcome != BattleOutcome.Victory)
                     throw new InvalidOperationException("The prepared battle ended before every new action was exercised.");
-                PressBattleButton("返回场景，继续剧情"); return;
+                if (BattleResultsVisible) _battleResultsContinue.EmitSignal(BaseButton.SignalName.Pressed);
+                else PressBattleButton("返回场景，继续剧情");
+                return;
             }
             if (battle.CurrentActor is not { IsFriendly: true } actor) return;
             if (_capturePath is not null && !_battleCaptured && DisplayServer.GetName() != "headless")

@@ -32,7 +32,12 @@ public partial class AppRoot
 
     public override void _UnhandledKeyInput(InputEvent input)
     {
-        if (input is InputEventKey { Pressed: true, Echo: false } &&
+        if (BattleResultsVisible && input is InputEventKey { Pressed: true, Echo: false } resultKey)
+        {
+            if (resultKey.Keycode is Key.Enter or Key.KpEnter or Key.Space or Key.E) ConfirmBattleResults();
+            GetViewport().SetInputAsHandled();
+        }
+        else if (input is InputEventKey { Pressed: true, Echo: false } &&
             _world.Session?.Battle is { Presentation: { WaitingForConfirmation: true } frame } battle)
         {
             ConfirmBattlePresentation(battle, frame.Token);
@@ -40,7 +45,7 @@ public partial class AppRoot
         }
         else if (input is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape } && _battleInputMode != BattleInputMode.None)
         {
-            _battleInputMode = BattleInputMode.None; _world.BattleMovePreview = false;
+            SetBattleInputMode(BattleInputMode.None);
             if (_battleActionHint is not null) _battleActionHint.Text = "已取消目标选取。";
             _world.QueueRedraw(); GetViewport().SetInputAsHandled();
         }
@@ -64,7 +69,7 @@ public partial class AppRoot
             if ((Input.IsActionPressed(ActionName(direction)) || Input.IsActionJustPressed(ActionName(direction))) &&
                 !_heldDirections.Contains(direction)) _heldDirections.Add(direction);
         var typing = GetViewport().GuiGetFocusOwner() is LineEdit;
-        var canWalk = !_finishing && !_busy && !typing && !_folder.Visible && !SaveMenuVisible && _inventoryDialog?.Visible != true && _modalClosedFrame != Engine.GetProcessFrames();
+        var canWalk = !_finishing && !_busy && !typing && !_folder.Visible && !SaveMenuVisible && !BattleResultsVisible && _inventoryDialog?.Visible != true && _modalClosedFrame != Engine.GetProcessFrames();
         if (canWalk)
         {
             if (_world.Session?.IsEventRunning == true)

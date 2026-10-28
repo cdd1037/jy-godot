@@ -113,5 +113,24 @@ public sealed class BattleSettlementTests
         Assert.HasCount(0, sequence); Assert.AreEqual(1, bag[1]); Assert.AreEqual(6, bag[2]);
         Assert.AreEqual(0, party.Roles[0][RoleWords.MakeItemExperience]);
         Assert.AreEqual(2, result.Roles.Single(role => role.Side == 0).CraftedCount);
+        Assert.AreEqual(new BattleInventorySettlement(1, 3, 1, true, true), result.InventoryChanges.Single(change => change.ItemId == 1));
+        Assert.AreEqual(new BattleInventorySettlement(2, 4, 6, true, true), result.InventoryChanges.Single(change => change.ItemId == 2));
+    }
+
+    [TestMethod]
+    public void SettlementFreezesBeforeAfterAttributesAndReportsNewMagicEvenAtZeroProficiency()
+    {
+        var party = Party(Role(0, practice: 0)); party.SetWord(0, RoleWords.ItemExperience, 1000);
+        var manual = new int[ItemWords.Count]; manual[ItemWords.MagicId] = 7; manual[ItemWords.NeedExperience] = 10;
+        manual[ItemWords.AddAttack] = 5; var battle = Battle(party);
+        var result = BattleSettlement.Settle(battle.Definition, battle.Combatants, true, 0, Rules(),
+            new Dictionary<int, ItemDefinition> { [0] = new(0, "Fixture manual", manual) },
+            _ => throw new AssertFailedException("This level30 practice fixture consumes no RNG."), new Dictionary<int, int>(), new HashSet<int>());
+        var hero = result.Roles.Single(role => role.Side == 0);
+        Assert.AreEqual(0, hero.BeforeWords[RoleWords.Attack]); Assert.AreEqual(5, hero.AfterWords[RoleWords.Attack]);
+        Assert.AreEqual(new BattleMagicSettlement(0, 0, 7, 0, 0), hero.MagicChanges.Single());
+        Assert.IsTrue(hero.Practiced); Assert.AreEqual(0, hero.IncreasedMagicSlots.Count);
+        party.SetWord(0, RoleWords.Attack, 99); party.SetWord(0, RoleWords.MagicIdBegin, 8);
+        Assert.AreEqual(5, hero.AfterWords[RoleWords.Attack]); Assert.AreEqual(7, hero.MagicChanges.Single().NewMagicId);
     }
 }

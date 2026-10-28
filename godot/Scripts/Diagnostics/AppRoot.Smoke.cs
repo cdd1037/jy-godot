@@ -150,6 +150,7 @@ public partial class AppRoot
             battlePresentationStages = _battlePresentationStages.Select(stage => stage.ToString()),
             battlePresentationSprites = _battlePresentationSprites,
             battleItemConfirmations = _battleItemConfirmations, playedBattleSounds = _playedBattleSounds,
+            battleResultConfirmations = _battleResultsConfirmations,
             battleOutcome = _world.Session?.LastBattleOutcome,
             variables = _world.Session?.Variables, inventory = _world.Session?.Inventory,
             eventTrace = _world.Session?.Events?.Trace

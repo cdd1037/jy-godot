@@ -25,6 +25,7 @@ public partial class SceneView : Control
         TextureFilter = TextureFilterEnum.Nearest;
         MouseFilter = MouseFilterEnum.Stop;
         Resized += QueueRedraw;
+        MouseExited += ClearBattleHover;
     }
 
     public void Advance(double delta)
@@ -53,11 +54,13 @@ public partial class SceneView : Control
 
     public override void _GuiInput(InputEvent input)
     {
+        if (TryHandleBattleHover(input)) { AcceptEvent(); return; }
         if (TryHandleBattleClick(input)) { AcceptEvent(); return; }
         if (input is not InputEventMouseButton { Pressed: true } mouse) return;
         if (mouse.ButtonIndex == MouseButton.WheelUp) _zoom = Math.Min(4, _zoom + 0.25f);
         else if (mouse.ButtonIndex == MouseButton.WheelDown) _zoom = Math.Max(1, _zoom - 0.25f);
         else return;
+        if (_session?.Battle is not null) UpdateBattleHover(mouse.Position);
         QueueRedraw();
         AcceptEvent();
     }

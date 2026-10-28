@@ -20,7 +20,11 @@ public partial class SceneView
     public bool BattleMovePreview
     {
         get => _battleMovePreview;
-        set { if (_battleMovePreview == value) return; _battleMovePreview = value; QueueRedraw(); }
+        set
+        {
+            if (value) BattleTargeting = new(BattleTargetingAction.Move);
+            else if (_battleTargeting?.Action == BattleTargetingAction.Move) BattleTargeting = null;
+        }
     }
 
     private static Vector2 BattleProject(GridPosition cell) => new((cell.X-cell.Y)*18,(cell.X+cell.Y)*9);
@@ -49,6 +53,7 @@ public partial class SceneView
     private void DrawBattle()
     {
         if (_session?.Battle is not { } battle) return;
+        RefreshBattleTargeting();
         DrawRect(new Rect2(Vector2.Zero,Size),new Color("101816"));
         DrawnSprites = 0;
         var origin = BattleOrigin(battle);
@@ -94,21 +99,19 @@ public partial class SceneView
             DrawColoredPolygon(points,fill);
             DrawPolyline([.. points,points[0]],border,Math.Max(1,_zoom),true);
         }
-        IReadOnlyDictionary<GridPosition,int>? reachable = presentation is null && BattleMovePreview && battle.CurrentActor?.IsFriendly == true
-            ? battle.ReachableMoves() : null;
         for (var x=0;x<64;x++)
         for (var y=0;y<64;y++)
         {
             var cell = new GridPosition(x,y);
             Sprite(battle.Battlefield.At(BattlefieldLayer.Ground,cell),BattleProject(cell));
         }
+        DrawBattleTargetingPath(origin);
         for (var x=0;x<64;x++)
         for (var y=0;y<64;y++)
         {
             var cell = new GridPosition(x,y);
             var anchor = BattleProject(cell);
-            if (reachable?.ContainsKey(cell) == true)
-                Diamond(cell,new Color(0.2f,0.65f,0.75f,0.13f),new Color(0.3f,0.75f,0.85f,0.35f));
+            DrawBattleTargetingCell(cell, Diamond);
             occupants.TryGetValue(cell,out var occupant);
             if (occupant is not null)
             {
@@ -126,7 +129,7 @@ public partial class SceneView
                 Color? flash=null;
                 // Native effect cells own highlighting independently of number
                 // entries: a zero-damage throw can flash without drawing "-0".
-                // Keep knocked-out snapshots visible, but do not flash them.
+                // The native renderer's signed HP gate includes zero.
                 if(presentation?.Flash==true && presentation.HighlightedCells.Contains(cell) && occupant.Hp>=0)
                     flash=BattlePaletteColor(presentation.FlashKind switch
                     {
@@ -154,15 +157,12 @@ public partial class SceneView
 
     private bool TryHandleBattleClick(InputEvent input)
     {
-        if (_session?.Battle is not { } battle || input is not InputEventMouseButton
+        if (_session?.Battle is null || input is not InputEventMouseButton
             { Pressed:true,ButtonIndex:MouseButton.Left } mouse) return false;
-        if(battle.IsPresenting) { AcceptEvent(); return true; }
-        var point = (mouse.Position-BattleOrigin(battle))/_zoom;
-        var x = (point.X/18+point.Y/9)/2;
-        var y = (point.Y/9-point.X/18)/2;
-        var cell = new GridPosition((int)Math.Round(x,MidpointRounding.AwayFromZero),(int)Math.Round(y,MidpointRounding.AwayFromZero));
-        if (BattlefieldDefinition.Contains(cell))
+        if(!SynchronizeBattleTargetingOwner()) { AcceptEvent(); return true; }
+        if (BattleCellAt(mouse.Position) is { } cell)
         {
+            _hoveredBattleCell = cell; RefreshBattleTargeting();
             SelectedBattleCell = cell;
             BattleCellSelected?.Invoke(cell);
         }

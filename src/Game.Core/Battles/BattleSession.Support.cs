@@ -19,11 +19,12 @@ public sealed partial class BattleSession
     public bool CanTargetSupport(BattleSupportAction action, GridPosition target)
         => TargetSupportInRange(action, target, enforceMenu: true);
 
-    private bool TargetSupportInRange(BattleSupportAction action, GridPosition target, bool enforceMenu)
+    private bool TargetSupportInRange(BattleSupportAction action, GridPosition target, bool enforceMenu,
+        IReadOnlyDictionary<GridPosition, int>? existingDistances = null)
     {
         if (IsPresenting || CurrentActor is null || !BattlefieldDefinition.Contains(target) || enforceMenu && !CanUseSupport(action)) return false;
         var actor = CurrentActor!; var range = SupportRange(action);
-        var distances = BattlePathing.Distances(Battlefield, Combatants, actor.Position, targeting: true, maximum: range);
+        var distances = existingDistances ?? TargetingDistances(actor, range);
         return distances.TryGetValue(target, out var distance) && distance <= range;
     }
     public bool UsePoison(GridPosition target) => ApplySupport(BattleSupportAction.UsePoison, target);

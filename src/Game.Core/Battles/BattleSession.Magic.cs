@@ -19,11 +19,12 @@ public sealed partial class BattleSession
         var id = actor.Role[RoleWords.MagicIdBegin + magicSlot];
         return BattleMagicRules.AreaCells(BattleMagicRules.Profile(actor.Role, _magics[id], magicSlot), actor.Position, target, direction);
     }
-    private bool TargetInRange(BattleCombatant actor, BattleAttackProfile profile, GridPosition target)
+    private bool TargetInRange(BattleCombatant actor, BattleAttackProfile profile, GridPosition target,
+        IReadOnlyDictionary<GridPosition, int>? existingDistances = null)
     {
         if (!BattlefieldDefinition.Contains(target)) return false;
         if (profile.AreaType is 1 or 2) return true;
-        var distances = BattlePathing.Distances(Battlefield, Combatants, actor.Position, targeting: true, maximum: profile.SelectDistance);
+        var distances = existingDistances ?? TargetingDistances(actor, profile.SelectDistance);
         return distances.TryGetValue(target, out var distance) && distance <= profile.SelectDistance;
     }
 

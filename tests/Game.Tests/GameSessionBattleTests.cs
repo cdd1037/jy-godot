@@ -52,7 +52,7 @@ public sealed class GameSessionBattleTests
         return new(1, commands);
     }
     private static GameSession Session(EventProgram? program = null, bool defeat = false, bool resources = true,
-        bool progression = true, bool medicine = false)
+        bool progression = true, bool medicine = false, IEnumerable<ItemDefinition>? settlementItems = null)
     {
         var party = new PartyDefinition(defeat ? [Role(0, 0, 10, 15), Role(1, 500, 100, 60)] :
             [Role(0, 500, 100, 60), Role(1, 0, medicine ? 100 : 10, 30)], [0, -1, -1, -1, -1, -1]);
@@ -70,7 +70,7 @@ public sealed class GameSessionBattleTests
             999, 999, 110, 1, 1, 2, 4, 5) : null;
         var itemWords = new int[ItemWords.Count]; itemWords[ItemWords.ItemType] = 3; itemWords[ItemWords.AddHp] = 20;
         var catalog = resources ? new BattleCatalog([Definition()], [new BattlefieldDefinition(0, new short[8192])],
-            [Magic()], medicine ? [new ItemDefinition(0, "Fixture medicine", itemWords)] : [], party, rules) : null;
+            [Magic()], settlementItems ?? (medicine ? new[] { new ItemDefinition(0, "Fixture medicine", itemWords) } : Array.Empty<ItemDefinition>()), party, rules) : null;
         return new(worldScene.ToSceneDefinition(new(19, 20)), story, battles: catalog);
     }
     private static BattleSession Start(GameSession session)
@@ -109,6 +109,7 @@ public sealed class GameSessionBattleTests
         Assert.IsTrue(battle.CurrentActor!.IsFriendly);
         Assert.IsTrue(battle.AttackMagic(0, battle.Combatants.Single(actor => !actor.IsFriendly).Position), battle.LastError);
         Assert.IsTrue(battle.IsPresenting); Assert.AreEqual(BattleOutcome.Ongoing, battle.Outcome);
+        Assert.IsFalse(session.PrepareBattleSettlement()); Assert.IsNull(session.PendingBattleSettlement);
         Assert.IsFalse(session.FinishBattle());
         CompletePresentation(session);
         Assert.AreEqual(BattleOutcome.Victory, battle.Outcome);
@@ -215,11 +216,85 @@ public sealed class GameSessionBattleTests
         session.Party.SetWord(0, RoleWords.Hurt, 60);
         var battle = Start(session); HeroWins(session);
         Assert.AreEqual(3, session.Party.GetWord(0, RoleWords.Hp));
+        Assert.IsTrue(session.PrepareBattleSettlement());
+        var prepared = session.PendingBattleSettlement!;
+        Assert.AreEqual(20, session.Party.GetWord(0, RoleWords.Hp));
+        Assert.AreEqual(3, prepared.Roles.Single(role => role.Side == 0).BeforeWords[RoleWords.Hp]);
+        Assert.AreEqual(20, prepared.Roles.Single(role => role.Side == 0).AfterWords[RoleWords.Hp]);
+        Assert.IsTrue(session.PrepareBattleSettlement()); Assert.AreEqual(20, session.Party.GetWord(0, RoleWords.Hp));
         Assert.IsTrue(session.FinishBattle());
         Assert.AreEqual(17, session.Party.GetWord(0, RoleWords.Hp)); // MaxHP/5=20, then hurt/20=3.
         Assert.AreEqual(BattleOutcome.Victory, session.LastBattleOutcome);
         Assert.IsFalse(battle.CompleteAfterSettlement()); Assert.IsFalse(session.FinishBattle());
         Assert.AreEqual(17, session.Party.GetWord(0, RoleWords.Hp));
+        Assert.AreEqual(20, prepared.Roles.Single(role => role.Side == 0).AfterWords[RoleWords.Hp]);
+    }
+
+    [TestMethod]
+    public void PreparingSettlementCommitsOnceAndKeepsTheBattleTokenUntilFinalConfirmation()
+    {
+        var session = Session(); session.Party!.SetWord(0, RoleWords.Experience, 1500);
+        var battle = Start(session); Assert.IsFalse(session.PrepareBattleSettlement());
+        HeroWins(session); var token = session.Events!.PendingBattle!.Token;
+        Assert.IsTrue(session.PrepareBattleSettlement()); var prepared = session.PendingBattleSettlement!;
+        var hero = prepared.Roles.Single(role => role.Side == 0);
+        Assert.AreEqual(1, hero.OldLevel); Assert.AreEqual(2, hero.NewLevel);
+        Assert.AreEqual(1500, hero.BeforeWords[RoleWords.Experience]);
+        Assert.AreEqual(session.Party.GetWord(0, RoleWords.Experience), hero.AfterWords[RoleWords.Experience]);
+        Assert.AreSame(battle, session.Battle); Assert.AreEqual(token, session.Events.PendingBattle!.Token);
+        Assert.IsNull(session.LastBattleOutcome); Assert.IsTrue(session.IsInputLocked); Assert.IsFalse(session.CanSave);
+        Assert.IsFalse(session.Events.ResumeBattle(token)); Assert.AreEqual(0, session.Events.CompletedCount);
+        Assert.AreEqual(2, session.Inventory[0]); Assert.AreEqual(0, session.Variables.Count);
+        var revision = session.PresentationRevision; var experience = session.Party.GetWord(0, RoleWords.Experience);
+        Assert.IsTrue(session.PrepareBattleSettlement()); Assert.IsTrue(session.PrepareBattleSettlement());
+        Assert.AreSame(prepared, session.PendingBattleSettlement); Assert.AreEqual(revision, session.PresentationRevision);
+        Assert.AreEqual(experience, session.Party.GetWord(0, RoleWords.Experience)); Assert.IsNull(session.BattleSettlementError);
+        Assert.ThrowsExactly<NotSupportedException>(() => ((IList<int>)hero.AfterWords)[RoleWords.Attack] = 999);
+        Assert.IsTrue(session.FinishBattle()); Assert.IsNull(session.PendingBattleSettlement);
+        Assert.AreSame(prepared, session.LastBattleSettlement); Assert.AreEqual(1, session.Events.CompletedCount);
+        Assert.AreEqual(3, session.Inventory[0]); Assert.IsFalse(session.FinishBattle()); Assert.IsFalse(session.PrepareBattleSettlement());
+        uint random = 1;
+        // Three attack draws followed by exactly one three-draw level-up.
+        foreach (var bound in new[] { 20, 20, 2, 2, 3, 3 }) Roll(ref random, bound);
+        Assert.AreEqual(random, session.Events.CaptureIdleState().RandomState);
+    }
+
+    [TestMethod]
+    public void FailedSettlementIsLatchedWithoutRewardCommitOrRepeatedRandomAttempts()
+    {
+        var manual = new int[ItemWords.Count]; manual[ItemWords.MagicId] = -1; manual[ItemWords.NeedExperience] = 1000;
+        manual[ItemWords.NeedMakeItemExperience] = 1; manual[ItemWords.NeedMaterial] = 0;
+        for (var slot = 0; slot < 5; slot++) manual[ItemWords.MakeItemBegin + slot] = -1;
+        manual[ItemWords.MakeItemBegin] = 99; manual[ItemWords.MakeItemCountBegin] = 1;
+        var session = Session(settlementItems: [new ItemDefinition(0, "Broken fixture manual", manual)]);
+        session.Party!.SetWord(0, RoleWords.Experience, 1500); session.Party.SetWord(0, RoleWords.PracticeItem, 0);
+        session.Party.SetWord(0, RoleWords.MakeItemExperience, 1000);
+        var battle = Start(session); HeroWins(session); var token = session.Events!.PendingBattle!.Token;
+        // Level-up consumes RNG on candidate role copies, then the unknown crafting product fails before commit.
+        Assert.IsFalse(session.PrepareBattleSettlement()); Assert.IsNotNull(session.BattleSettlementError);
+        Assert.IsNull(session.PendingBattleSettlement); Assert.IsNull(session.LastBattleSettlement);
+        Assert.AreEqual(1500, session.Party.GetWord(0, RoleWords.Experience)); Assert.AreEqual(1, session.Party.GetWord(0, RoleWords.Level));
+        Assert.AreEqual(1000, session.Party.GetWord(0, RoleWords.MakeItemExperience)); Assert.AreEqual(2, session.Inventory[0]);
+        Assert.AreSame(battle, session.Battle); Assert.AreEqual(token, session.Events.PendingBattle!.Token);
+        var revision = session.PresentationRevision; var error = session.BattleSettlementError;
+        // Even repairing the fixture cannot restart a partly consumed RNG calculation on the next host frame.
+        session.Party.SetWord(0, RoleWords.PracticeItem, -1);
+        Assert.IsFalse(session.PrepareBattleSettlement()); Assert.IsFalse(session.FinishBattle());
+        Assert.AreEqual(revision, session.PresentationRevision); Assert.AreEqual(error, session.BattleSettlementError);
+        Assert.AreEqual(0, session.Events.CompletedCount); Assert.IsFalse(session.Events.ResumeBattle(token));
+        session.RetireForReplacement(); Assert.IsNull(session.PendingBattleSettlement); Assert.IsNull(session.BattleSettlementError);
+    }
+
+    [TestMethod]
+    public void BeginningAnotherBattleAndRetiringHideThePreviousPreparedSettlement()
+    {
+        var session = Session(TwoBattles()); Start(session); HeroWins(session);
+        Assert.IsTrue(session.PrepareBattleSettlement()); var previous = session.PendingBattleSettlement;
+        Assert.IsTrue(session.FinishBattle()); Assert.IsTrue(session.Events!.Confirm(session.Events.Pending!.Token));
+        Assert.IsNotNull(session.Battle); Assert.IsNull(session.PendingBattleSettlement); Assert.IsNull(session.LastBattleSettlement);
+        Assert.IsNull(session.BattleSettlementError); HeroWins(session);
+        Assert.IsTrue(session.PrepareBattleSettlement()); Assert.AreNotSame(previous, session.PendingBattleSettlement);
+        session.RetireForReplacement(); Assert.IsNull(session.PendingBattleSettlement); Assert.IsNull(session.BattleSettlementError);
     }
 
     private static EventProgram TwoBattles() => new(1,
@@ -279,6 +354,7 @@ public sealed class GameSessionBattleTests
         var source = Session(); Start(source); HeroWins(source); Assert.IsTrue(source.FinishBattle());
         var snapshot = source.CaptureSnapshot(); Assert.AreEqual(3, snapshot.HpCostScale);
         var restored = GameSession.Restore(source.Definition, source.Story, snapshot, battles: source.BattleResources);
+        Assert.IsNull(restored.PendingBattleSettlement); Assert.IsNull(restored.LastBattleSettlement); Assert.IsNull(restored.BattleSettlementError);
         var originalBattle = Start(source); var restoredBattle = Start(restored);
         Assert.AreEqual(3, restoredBattle.HpCostScale);
         Assert.IsTrue(originalBattle.ConfirmParty([])); Assert.IsTrue(restoredBattle.ConfirmParty([]));

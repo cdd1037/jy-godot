@@ -20,7 +20,7 @@ JinYong.Godot/
 │   ├── Scenes/AppRoot.tscn 主场景，继续绑定同一入口脚本 UID
 │   └── Scripts/
 │       ├── App/            AppRoot 入口、启动、UI、内容、输入、剧情、背包、存档与旅行
-│       ├── Battle/         AppRoot.Battle、BattleAudio 宿主控制
+│       ├── Battle/         AppRoot.Battle、Controls、Actions、Results、BattleAudio 与结果文字
 │       ├── Views/          SceneView、Assets、Exploration、World、Battle 与 DialoguePanel
 │       └── Diagnostics/    AppRoot 各项 Smoke 和 SmokeRoute
 ├── tools/Game.Tools/       导入、检查及诊断命令行工具
@@ -59,6 +59,8 @@ Content 中的 `GameLibrary` 按 `Loading`、`Scenes`、`Views` 分开加载校�
 
 Godot 主场景位置保持 `Scenes/AppRoot.tscn`，入口脚本路径改为 `Scripts/App/AppRoot.cs` 并保留原 UID。`Views` 内将资源准备和探索绘制从主 `SceneView` 分开，战斗和世界绘制仍是同一个视图的分部；`Diagnostics` 集中冒烟驱动代码，不改变正式入口与规则归属。
 
+战斗宿主进一步按 `AppRoot.Battle` 主流程、`Controls` 控件、`Actions` 输入提交、`Results` 战果遮罩及 `BattleAudio` 音效分工。`BattleResultsText` 是同一 Host 内不依赖 Godot 类型的纯 C# 格式器，只把冻结结果转为中文分节；它不发奖励、不消费 RNG、不回读当前人物数值。Core 的目标查询提供合法范围、路径和影响格，SceneView 缓存绘制结果，Godot 不复制一套判定规则。
+
 ## 新库与兼容代码
 
 新的生产入口使用 `GameLibrary` 和 `content/base/`，不再逐场景导出完整内容包。世界、场景和战斗共用一个资源库与会话；战斗代码与当前边界见[战斗](battles.md)。存档用独立的会话快照保存变化，不复制基础库，见[存读档](persistence.md)。
@@ -67,6 +69,6 @@ Godot 主场景位置保持 `Scenes/AppRoot.tscn`，入口脚本路径改为 `Sc
 
 正式入口为 `build.ps1` 构建和测试、`import.ps1` 一次导入全库、`run.ps1` 加载并运行。`-Scene` 选择预览起点，`-EventDemo` / `-StoryOverlay` 在内存应用剧情数据；没有按场景导出步骤，也不需要生成第二套基础资源。
 
-本轮仅整理源码职责和项目边界，未重新导入资源，也未运行构建、测试或验收。历史 427 项测试及宿主冒烟是整理前的基线，不能证明移动后的脚本和程序集引用已经通过。
+本轮源码整理及其后的战斗结算阶段、战果页、目标预览和旧按钮保护，均未重新导入资源，也未运行构建、测试或验收。历史 427 项测试及宿主冒烟是整理前的基线，不能证明移动后的脚本、程序集引用或新增流程已经通过。
 
 资源库具体布局见 [中央资源库](resource-library.md)，提交与验证约定见 [参与开发](../CONTRIBUTING.md)。

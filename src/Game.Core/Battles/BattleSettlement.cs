@@ -4,8 +4,19 @@ namespace JinYong.Core.Battles;
 
 public sealed record BattleRoleSettlement(int RoleId, int Side, int ExperienceGained, int OldLevel, int NewLevel,
     bool ExperienceMessageRequired, bool Practiced, int PracticeItemId, IReadOnlyList<int> IncreasedMagicSlots,
-    int? CraftedItemId, int CraftedCount);
-public sealed record BattleSettlementResult(int SharedExperience, IReadOnlyList<BattleRoleSettlement> Roles, IReadOnlyList<string> Notices);
+    int? CraftedItemId, int CraftedCount)
+{
+    /// <summary>Frozen values before/after this entry (the first entry starts before settlement recovery), before the final round-status tick.</summary>
+    public IReadOnlyList<int> BeforeWords { get; init; } = [];
+    public IReadOnlyList<int> AfterWords { get; init; } = [];
+    public IReadOnlyList<BattleMagicSettlement> MagicChanges { get; init; } = [];
+}
+public sealed record BattleMagicSettlement(int Slot, int OldMagicId, int NewMagicId, int OldProficiency, int NewProficiency);
+public sealed record BattleInventorySettlement(int ItemId, int OldCount, int NewCount, bool HadItemId, bool HasItemId);
+public sealed record BattleSettlementResult(int SharedExperience, IReadOnlyList<BattleRoleSettlement> Roles, IReadOnlyList<string> Notices)
+{
+    public IReadOnlyList<BattleInventorySettlement> InventoryChanges { get; init; } = [];
+}
 
 /// <summary>
 /// DOS baseline settlement, deliberately independent of BattleSession presentation.
@@ -27,6 +38,7 @@ public static class BattleSettlement
         ArgumentNullException.ThrowIfNull(random);
         var roles = combatants.Select(actor => actor.Role).Distinct().ToDictionary(role => role,
             role => Enumerable.Range(0, RoleWords.Count).Select(word => role[word]).ToArray());
+        var beforeRoles = roles.ToDictionary(pair => pair.Key, pair => pair.Value.ToArray());
         var bag = inventory.ToDictionary(pair => pair.Key, pair => pair.Value);
         var ids = itemIds.ToHashSet();
         foreach (var actor in combatants.Where(actor => actor.Side == 0 && (getExp == 1 || victory)))
@@ -88,15 +100,32 @@ public static class BattleSettlement
                     if (product is { } id) notices.Add($"{actor.Role.Name} 制造 {items[id].Name} × {produced}");
                 }
             }
+            var before = beforeRoles[actor.Role];
+            var magicChanges = Enumerable.Range(0, RoleWords.MagicCount).Where(slot =>
+                    before[RoleWords.MagicIdBegin + slot] != words[RoleWords.MagicIdBegin + slot] ||
+                    before[RoleWords.MagicLevelBegin + slot] != words[RoleWords.MagicLevelBegin + slot])
+                .Select(slot => new BattleMagicSettlement(slot, before[RoleWords.MagicIdBegin + slot], words[RoleWords.MagicIdBegin + slot],
+                    before[RoleWords.MagicLevelBegin + slot], words[RoleWords.MagicLevelBegin + slot])).ToArray();
             results.Add(new(actor.Role.Id, actor.Side, reward, oldLevel, S(words[RoleWords.Level]), message,
-                practiced, practiceItem, improved.AsReadOnly(), product, produced));
+                practiced, practiceItem, improved.AsReadOnly(), product, produced)
+            {
+                BeforeWords = Array.AsReadOnly(before.ToArray()), AfterWords = Array.AsReadOnly(words.ToArray()),
+                MagicChanges = Array.AsReadOnly(magicChanges)
+            });
+            // Duplicate native slots can share one RoleState. The next entry starts
+            // from this entry's completed values, rather than reporting its gains twice.
+            beforeRoles[actor.Role] = words.ToArray();
         }
+        int PreviousQuantity(int id) => inventory.TryGetValue(id, out var quantity) ? quantity : 0;
+        var inventoryChanges = inventory.Keys.Concat(bag.Keys).Concat(itemIds).Concat(ids).Distinct().Order()
+            .Where(id => PreviousQuantity(id) != bag.GetValueOrDefault(id) || itemIds.Contains(id) != ids.Contains(id))
+            .Select(id => new BattleInventorySettlement(id, PreviousQuantity(id), bag.GetValueOrDefault(id), itemIds.Contains(id), ids.Contains(id))).ToArray();
         foreach (var (role, words) in roles)
             for (var word = 0; word < words.Length; word++) role.Set(word, words[word]);
         for (var index = 0; index < combatants.Count; index++) combatants[index].RewardExperience = rewards[index];
         inventory.Clear(); foreach (var pair in bag) inventory.Add(pair.Key, pair.Value);
         itemIds.Clear(); foreach (var id in ids) itemIds.Add(id);
-        return new(shared, results.AsReadOnly(), notices.AsReadOnly());
+        return new(shared, results.AsReadOnly(), notices.AsReadOnly()) { InventoryChanges = Array.AsReadOnly(inventoryChanges) };
     }
 
     private static int S(int value) => unchecked((short)value);

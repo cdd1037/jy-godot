@@ -26,7 +26,8 @@ public partial class AppRoot
     {
         if (_world.Session is not { } session) return;
         UpdateSceneInfo();
-        _controlsHint.Text = session.Battle is not null ? "鼠标选择行动与目标 · 滚轮缩放" : "WASD 行走 · E / 空格 交互 · Enter 继续 · 滚轮缩放";
+        _controlsHint.Text = BattleResultsVisible ? "Enter / 空格继续剧情" : session.Battle is not null
+            ? "鼠标选择行动与目标 · Esc 取消 · 滚轮缩放" : "WASD 行走 · E / 空格 交互 · Enter 继续 · 滚轮缩放";
         _bagButton.Disabled = _busy || !session.CanSave || _world.IsMoving || _package?.Story is null;
         UpdateSaveButtons();
         if (session.Battle is { } battle) PlayBattlePresentationSounds(battle);
@@ -44,7 +45,8 @@ public partial class AppRoot
             _audio.Play();
             _playedSounds.Add(soundId);
         }
-        if (session.PendingLifecycle is not null) _status.Text = "请载入存档或退出游戏。";
+        if (BattleResultsVisible) _status.Text = "查看战果后，按 Enter / 空格或点击继续剧情。";
+        else if (session.PendingLifecycle is not null) _status.Text = "请载入存档或退出游戏。";
         else if (session.Battle?.Presentation is { WaitingForConfirmation: true }) _status.Text = "按任意键或点击继续，关闭药效面板。";
         else if (session.Battle?.IsPresenting == true) _status.Text = "正在行动……";
         else if (session.Battle is not null) _status.Text = "选择行动后点击战场格子；战斗结束后按返回继续剧情。";

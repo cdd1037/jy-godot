@@ -56,9 +56,13 @@ public partial class AppRoot
             }
             if (battle.Phase == BattlePhase.Finished)
             {
-                _battleSmokeOutcome = battle.Outcome;
-                if (!PressBattleButton("返回场景，继续剧情")) return;
-                _battleChecks++; _battleSmokeStage = 3;
+                if (_battleSmokeStage < 3)
+                {
+                    _battleSmokeOutcome = battle.Outcome;
+                    _battleChecks++; _battleSmokeStage = 3;
+                }
+                if (BattleResultsVisible) _battleResultsContinue.EmitSignal(BaseButton.SignalName.Pressed);
+                else PressBattleButton("返回场景，继续剧情");
                 return;
             }
             if (battle.CurrentActor is not { IsFriendly: true } actor) return;

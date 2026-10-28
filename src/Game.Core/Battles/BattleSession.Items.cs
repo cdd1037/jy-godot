@@ -74,15 +74,16 @@ public sealed partial class BattleSession
     public bool CanTargetThrownItem(int itemId, GridPosition target)
         => TargetThrownItemInRange(itemId, target, automatic: false);
 
-    private bool TargetThrownItemInRange(int itemId, GridPosition target, bool automatic)
+    private bool TargetThrownItemInRange(int itemId, GridPosition target, bool automatic,
+        IReadOnlyDictionary<GridPosition, int>? existingDistances = null)
     {
         if (IsPresenting || CurrentActor is not { } actor || !BattlefieldDefinition.Contains(target) ||
             !_items.TryGetValue(itemId, out var item) || item[ItemWords.ItemType] != 4 ||
             (automatic ? !HasCarriedItem(actor, itemId) : !AvailableBattleItems().Contains(itemId)) ||
             OccupantAt(target) is not { IsAlive: true } victim || victim.IsFriendly == actor.IsFriendly) return false;
-        var range = actor.Role[RoleWords.HiddenWeapon] / 15 + 1;
+        var range = ThrownTargetingRange(actor);
         if (range < 0) return false;
-        var distances = BattlePathing.Distances(Battlefield, Combatants, actor.Position, targeting: true, maximum: range);
+        var distances = existingDistances ?? TargetingDistances(actor, range);
         return distances.TryGetValue(target, out var distance) && distance <= range;
     }
     /// <summary>

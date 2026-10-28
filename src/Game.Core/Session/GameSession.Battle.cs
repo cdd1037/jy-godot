@@ -8,9 +8,31 @@ public sealed partial class GameSession
     // Normal DOS startup zeroes the BSS range containing word_E6EC2.
     private int _battleExperienceFlag, _battleHpCostScale;
     public BattleCatalog? BattleResources { get; }
-    public BattleSession? Battle { get; private set; }
+    private BattleSession? _activeBattle;
+    public BattleSession? Battle
+    {
+        get => _activeBattle;
+        private set
+        {
+            _activeBattle = value;
+            // This also covers RetireForReplacement's existing Battle=null path.
+            _settlementBattle = null; _settlementToken = 0; _settlementAttempted = false;
+            _pendingBattleSettlement = null; _battleSettlementError = null;
+        }
+    }
     public BattleOutcome? LastBattleOutcome { get; private set; }
     public BattleSettlementResult? LastBattleSettlement { get; private set; }
+    private BattleSession? _settlementBattle;
+    private long _settlementToken;
+    private bool _settlementAttempted;
+    private BattleSettlementResult? _pendingBattleSettlement;
+    private string? _battleSettlementError;
+    private bool HasCurrentSettlement => !IsRetired && Battle is not null && ReferenceEquals(Battle, _settlementBattle) &&
+        Events?.PendingBattle?.Token == _settlementToken;
+    /// <summary>Frozen, already committed rewards while the original battlefield/event token await final confirmation.</summary>
+    public BattleSettlementResult? PendingBattleSettlement => HasCurrentSettlement ? _pendingBattleSettlement : null;
+    /// <summary>Calculation failure for this battle. A failed preparation is not retried or charged RNG again.</summary>
+    public string? BattleSettlementError => HasCurrentSettlement ? _battleSettlementError : null;
 
     private void ValidateBattleCommand(EventCommand command)
     {
@@ -34,31 +56,54 @@ public sealed partial class GameSession
         PresentationRevision++;
     }
 
+    /// <summary>
+    /// Commits settlement once at a finished, unpresented boundary and retains the battle continuation.
+    /// Not ready returns false without an error. Calculation failure returns false with BattleSettlementError;
+    /// subsequent calls return the cached success/failure without rewards or further RNG consumption.
+    /// </summary>
+    public bool PrepareBattleSettlement()
+    {
+        if (IsRetired || Battle is not { Phase: BattlePhase.Finished, Outcome: not BattleOutcome.Ongoing, IsPresenting: false } battle ||
+            Events?.PendingBattle is not { } pending) return false;
+        if (HasCurrentSettlement && _settlementAttempted) return _pendingBattleSettlement is not null;
+        _settlementBattle = battle; _settlementToken = pending.Token; _settlementAttempted = true;
+        _pendingBattleSettlement = null; _battleSettlementError = null;
+        try
+        {
+            var resources = BattleResources!;
+            var result = BattleSettlement.Settle(battle.Definition, battle.Combatants,
+                battle.Outcome == BattleOutcome.Victory, _battleExperienceFlag, resources.Progression!, resources.Items,
+                Events!.DrawRandom, _inventory, _itemIds);
+            _pendingBattleSettlement = result; LastBattleSettlement = result;
+            PresentationRevision++;
+            return true;
+        }
+        catch (Exception error)
+        {
+            // Settle calculates on copies before committing roles/inventory. Its shared
+            // random callback cannot rewind; cache this failure instead of retrying every frame.
+            _battleSettlementError = $"战后结算未完成：{error.Message}";
+            PresentationRevision++;
+            return false;
+        }
+    }
+
     public bool FinishBattle()
     {
-        if (Battle is not { Outcome: not BattleOutcome.Ongoing, IsPresenting: false } battle || Events?.PendingBattle is not { } pending) return false;
-        // Settlement is performed before consuming the continuation, so repeating
-        // an old UI confirmation cannot pay rewards twice or choose a branch.
-        SettleBattle(battle, _battleExperienceFlag);
+        if (!PrepareBattleSettlement() || Battle is not { } battle || Events?.PendingBattle is not { } pending) return false;
+        // DOS runs the last hurt/poison tick after result messages. Preparation deliberately
+        // retains the frozen battlefield outcome until this final acknowledgement.
         battle.CompleteAfterSettlement();
         _battleHpCostScale = battle.HpCostScale;
         LastBattleOutcome = battle.Outcome;
         Battle = null;
         PresentationRevision++;
-        return Events.ResumeBattle(pending.Token);
+        return Events!.ResumeBattle(pending.Token);
     }
 
     bool IEventWorld.TryGetBattleOutcome(out bool victory)
     {
         victory = LastBattleOutcome == BattleOutcome.Victory;
         return Battle is null && LastBattleOutcome.HasValue;
-    }
-
-    private void SettleBattle(BattleSession battle, int experienceFlag)
-    {
-        var resources = BattleResources!;
-        LastBattleSettlement = BattleSettlement.Settle(battle.Definition, battle.Combatants,
-            battle.Outcome == BattleOutcome.Victory, experienceFlag, resources.Progression!, resources.Items,
-            Events!.DrawRandom, _inventory, _itemIds);
     }
 }

@@ -201,13 +201,15 @@ public partial class AppRoot
 
     private void ResetBattleHostAfterLoad()
     {
+        CloseBattleResults();
         StopBattleAudio(releaseCachedStreams: true);
         _shownBattle = null; _shownBattleActor = null; _shownBattlePhase = null; _battleReturnView = null;
         _shownBattlePresenting = false; _shownBattleConfirmation = null;
+        _shownBattleRound = -1;
         _battleUiError = null; _battleInputMode = BattleInputMode.None;
         _battleControls.Hide();
         foreach (var control in _explorationControls) control.Show();
-        _world.BattleMovePreview = false;
+        SetBattleInputMode(BattleInputMode.None);
     }
 
     private void CloseSaveMenu()
