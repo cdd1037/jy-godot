@@ -10,7 +10,7 @@ public partial class BattleActionPanel : VBoxContainer
     private int _selectedMagicSlot = -1, _selectedItemId = -1;
     public event Action<BattleActionIntent>? ActionRequested;
 
-    public override void _Ready() => AddThemeConstantOverride("separation", 9);
+    public override void _Ready() => AddThemeConstantOverride("separation", 2);
 
     public void Render(BattleActionModel model)
     {
@@ -30,7 +30,9 @@ public partial class BattleActionPanel : VBoxContainer
         Button ActionButton(string text, BattleActionKind kind, Func<int>? value = null,
             Func<IReadOnlyList<int>>? selectedRoles = null)
         {
-            var button = new Button { Text = text, FocusMode = FocusModeEnum.None, CustomMinimumSize = new(0, 34) };
+            var button = new Button { Text = text, FocusMode = FocusModeEnum.None, CustomMinimumSize = new(0, 12),
+                AutowrapMode = TextServer.AutowrapMode.WordSmart };
+            button.AddThemeFontSizeOverride("font_size", 8);
             button.Pressed += () =>
             {
                 if (version != _renderVersion) return;
@@ -51,7 +53,8 @@ public partial class BattleActionPanel : VBoxContainer
             foreach (var option in model.PartyOptions)
             {
                 var box = new CheckBox { Text = option.Name + (option.Mandatory ? "（必选）" : ""),
-                    ButtonPressed = true, Disabled = option.Mandatory, FocusMode = FocusModeEnum.None };
+                    ButtonPressed = true, Disabled = option.Mandatory, FocusMode = FocusModeEnum.None,
+                    AutowrapMode = TextServer.AutowrapMode.WordSmart };
                 options.Add((option.Id, box)); AddChild(box);
             }
             ActionButton("确认出战", BattleActionKind.ConfirmParty,
@@ -69,7 +72,8 @@ public partial class BattleActionPanel : VBoxContainer
         }
 
         ActionButton("移动：点击可到达的格子", BattleActionKind.SelectMove).Disabled = !model.CanMove;
-        var magic = new OptionButton { Name = "BattleMagic", FocusMode = FocusModeEnum.None };
+        var magic = new OptionButton { Name = "BattleMagic", FocusMode = FocusModeEnum.None,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis };
         foreach (var option in model.MagicOptions) magic.AddItem(option.Name, option.Slot);
         _selectedMagicSlot = model.MagicOptions.Any(option => option.Slot == model.SelectedMagicSlot)
             ? model.SelectedMagicSlot : model.MagicOptions.FirstOrDefault()?.Slot ?? -1;
@@ -86,7 +90,8 @@ public partial class BattleActionPanel : VBoxContainer
         ActionButton("解毒：点击队友或自己", BattleActionKind.SelectDetox).Disabled = !model.CanDetox;
         ActionButton("医疗：点击队友或自己", BattleActionKind.SelectMedicine).Disabled = !model.CanMedicine;
 
-        var items = new OptionButton { Name = "BattleItem", FocusMode = FocusModeEnum.None };
+        var items = new OptionButton { Name = "BattleItem", FocusMode = FocusModeEnum.None,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis };
         foreach (var option in model.ItemOptions) items.AddItem(option.Name, option.Id);
         _selectedItemId = model.ItemOptions.Any(option => option.Id == model.SelectedItemId)
             ? model.SelectedItemId : model.ItemOptions.FirstOrDefault()?.Id ?? -1;

@@ -220,9 +220,7 @@ public partial class GameMenuPanel : Control
     {
         if (_model is null) return;
         var rect = LayoutTarget?.GetGlobalRect() ?? GetGlobalRect();
-        var factor = Math.Max(0.5f, Math.Min(rect.Size.X / 320f, rect.Size.Y / 200f));
-        _canvas.Scale = new Vector2(factor, factor);
-        _canvas.Position = rect.Position - GlobalPosition + (rect.Size - new Vector2(320, 200) * factor) / 2;
+        _canvas.Position = rect.Position - GlobalPosition;
         var compact = _model.Layout is GameMenuLayout.Main or GameMenuLayout.System or GameMenuLayout.Party;
         var box = _model.Layout switch
         {
@@ -246,6 +244,8 @@ public partial class GameMenuPanel : Control
     {
         if (_built) return;
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
+        // All UI coordinates are native design pixels. Viewport canvas_items
+        // stretching owns window scaling and font oversampling.
         _canvas = new Control { Size = new Vector2(320, 200), MouseFilter = MouseFilterEnum.Ignore };
         AddChild(_canvas);
         _mainBackdrop = new PanelContainer { Position = new Vector2(20, 18), Size = new Vector2(42, 132), MouseFilter = MouseFilterEnum.Ignore };

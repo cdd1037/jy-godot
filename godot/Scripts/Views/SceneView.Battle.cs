@@ -207,18 +207,18 @@ public partial class SceneView
         string[] labels=["生命","最大生命","中毒","体力","内力性质","内力","最大内力","攻击","轻功","防御",
             "医疗","用毒","解毒","抗毒","拳掌","御剑","耍刀","特殊","暗器","武学常识","道德","左右互搏","攻击带毒"];
         var changes=result.Deltas.Select((amount,index)=>(amount,index)).Where(change=>change.amount!=0).ToArray();
-        var width=Math.Min(420,Size.X-32); var height=58+24*((changes.Length+1)/2)+(waitForConfirmation ? 28 : 0);
+        var width=Math.Min(280,Size.X-12); var height=28+12*((changes.Length+1)/2)+(waitForConfirmation ? 16 : 0);
         var panel=new Rect2((Size-new Vector2(width,height))/2,new Vector2(width,height));
         DrawRect(panel,new Color(0.04f,0.08f,0.07f,0.96f));
         DrawRect(panel,new Color("aa9462"),false,1);
-        DrawString(_font,panel.Position+new Vector2(16,28),name+" · 物品效果",fontSize:19,modulate:new Color("e6d2a4"));
+        DrawString(_font,panel.Position+new Vector2(6,14),name+" · 物品效果",fontSize:10,modulate:new Color("e6d2a4"));
         for(var index=0;index<changes.Length;index++)
         {
             var (amount,field)=changes[index];
-            var position=panel.Position+new Vector2(16+(index%2)*width/2,54+(index/2)*24);
-            DrawString(_font,position,$"{labels[field]} {(amount>0 ? "+" : "")}{amount}",fontSize:15,modulate:new Color("ddd7c5"));
+            var position=panel.Position+new Vector2(6+(index%2)*width/2,26+(index/2)*12);
+            DrawString(_font,position,$"{labels[field]} {(amount>0 ? "+" : "")}{amount}",fontSize:8,modulate:new Color("ddd7c5"));
         }
         if(waitForConfirmation)
-            DrawString(_font,panel.Position+new Vector2(16,height-12),"按任意键继续",fontSize:14,modulate:new Color("a5b8a4"));
+            DrawString(_font,panel.Position+new Vector2(6,height-5),"按任意键继续",fontSize:8,modulate:new Color("a5b8a4"));
     }
 }

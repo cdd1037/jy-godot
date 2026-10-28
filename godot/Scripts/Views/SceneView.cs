@@ -8,7 +8,7 @@ public partial class SceneView : Control
 {
     private GameSession? _session;
     private SceneWalker? _walker;
-    private float _zoom = 2;
+    private float _zoom = 0.5f;
 
     public event Action<MovementResult>? MovementAttempted;
     public event Action? MenuRequested;
@@ -61,7 +61,7 @@ public partial class SceneView : Control
         if (TryHandleBattleClick(input)) { AcceptEvent(); return; }
         if (input is not InputEventMouseButton { Pressed: true } mouse) return;
         if (mouse.ButtonIndex == MouseButton.WheelUp) _zoom = Math.Min(4, _zoom + 0.25f);
-        else if (mouse.ButtonIndex == MouseButton.WheelDown) _zoom = Math.Max(1, _zoom - 0.25f);
+        else if (mouse.ButtonIndex == MouseButton.WheelDown) _zoom = Math.Max(0.5f, _zoom - 0.25f);
         else return;
         if (_session?.Battle is not null) UpdateBattleHover(mouse.Position);
         QueueRedraw();

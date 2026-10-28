@@ -137,14 +137,15 @@ public partial class EndingPanel : Control
         if (_built) return;
         SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         _hint = new Label { Text = "按任意键继续", HorizontalAlignment = HorizontalAlignment.Center, MouseFilter = MouseFilterEnum.Ignore };
-        _hint.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomWide); _hint.OffsetTop = -36; AddChild(_hint); _hint.Hide();
+        _hint.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomWide); _hint.OffsetTop = -14; AddChild(_hint); _hint.Hide();
         var center = new CenterContainer { MouseFilter = MouseFilterEnum.Ignore };
         center.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect); AddChild(center);
-        _errorPanel = new VBoxContainer { CustomMinimumSize = new Vector2(600, 0) };
-        _errorPanel.AddThemeConstantOverride("separation", 16); center.AddChild(_errorPanel);
-        _error = new Label { CustomMinimumSize = new Vector2(600, 0), AutowrapMode = TextServer.AutowrapMode.WordSmart };
-        _errorPanel.AddChild(_error);
-        var retry = new Button { Text = "重试结局", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 44) };
+        _errorPanel = new VBoxContainer { CustomMinimumSize = new Vector2(280, 0) };
+        _errorPanel.AddThemeConstantOverride("separation", 4); center.AddChild(_errorPanel);
+        _error = new Label { CustomMinimumSize = new Vector2(280, 0), AutowrapMode = TextServer.AutowrapMode.WordSmart };
+        var errorScroll = new ScrollContainer { CustomMinimumSize = new Vector2(280, 100), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        _errorPanel.AddChild(errorScroll); errorScroll.AddChild(_error); _error.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        var retry = new Button { Text = "重试结局", FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 16) };
         retry.Pressed += () => { if (IsOpen && _errorPanel.Visible) RetryRequested?.Invoke(); };
         _errorPanel.AddChild(retry); _errorPanel.Hide(); _built = true;
     }

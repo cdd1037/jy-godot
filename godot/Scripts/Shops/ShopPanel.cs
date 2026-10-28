@@ -7,6 +7,7 @@ public partial class ShopPanel : Control
 {
     private Label _balance = null!, _error = null!;
     private VBoxContainer _offers = null!;
+    private ScrollContainer _errorScroll = null!;
     private Button _buy = null!, _cancel = null!;
     private readonly Dictionary<int, Button> _rows = [];
     private ShopPanelModel? _model;
@@ -71,8 +72,8 @@ public partial class ShopPanel : Control
             var row = new Button
             {
                 Text = $"{offer.Name}    价格 {offer.Price}    库存 {offer.Stock}",
-                Alignment = HorizontalAlignment.Left, ToggleMode = true,
-                FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(560, 42)
+                Alignment = HorizontalAlignment.Left, ToggleMode = true, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+                FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(280, 16)
             };
             row.Pressed += () =>
             {
@@ -87,6 +88,7 @@ public partial class ShopPanel : Control
         }
         SelectedSlot = _rows.ContainsKey(selection) ? selection : model.Offers.FirstOrDefault()?.Slot ?? -1;
         _error.Text = model.Error ?? "";
+        _errorScroll.Visible = !string.IsNullOrEmpty(model.Error);
         IsOpen = true;
         SetSubmitting(false);
         Select(SelectedSlot);
@@ -155,49 +157,53 @@ public partial class ShopPanel : Control
         var center = new CenterContainer { MouseFilter = MouseFilterEnum.Ignore };
         center.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         AddChild(center);
-        var card = new PanelContainer { CustomMinimumSize = new Vector2(600, 0) };
+        var card = new PanelContainer { CustomMinimumSize = new Vector2(296, 0) };
         var style = new StyleBoxFlat
         {
-            BgColor = new Color("192720"), ContentMarginLeft = 18, ContentMarginRight = 18,
-            ContentMarginTop = 16, ContentMarginBottom = 16
+            BgColor = new Color("192720"), ContentMarginLeft = 4, ContentMarginRight = 4,
+            ContentMarginTop = 4, ContentMarginBottom = 4
         };
-        style.SetCornerRadiusAll(12);
+        style.SetCornerRadiusAll(2);
         card.AddThemeStyleboxOverride("panel", style);
         center.AddChild(card);
         var column = new VBoxContainer();
-        column.AddThemeConstantOverride("separation", 12);
+        column.AddThemeConstantOverride("separation", 3);
         card.AddChild(column);
         var title = new Label { Text = "商店" };
-        title.AddThemeFontSizeOverride("font_size", 28);
+        title.AddThemeFontSizeOverride("font_size", 12);
         column.AddChild(title);
         _balance = new Label();
         column.AddChild(_balance);
         _offers = new VBoxContainer();
-        _offers.AddThemeConstantOverride("separation", 8);
-        column.AddChild(_offers);
+        _offers.AddThemeConstantOverride("separation", 2);
+        var offersScroll = new ScrollContainer { CustomMinimumSize = new Vector2(280, 88), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        column.AddChild(offersScroll); offersScroll.AddChild(_offers);
+        _offers.SizeFlagsHorizontal = SizeFlags.ExpandFill;
         _error = new Label
         {
             AutowrapMode = TextServer.AutowrapMode.WordSmart,
-            CustomMinimumSize = new Vector2(560, 0), Modulate = new Color("e6b89d")
+            CustomMinimumSize = new Vector2(280, 0), Modulate = new Color("e6b89d")
         };
-        column.AddChild(_error);
+        _errorScroll = new ScrollContainer { CustomMinimumSize = new Vector2(280, 16), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        column.AddChild(_errorScroll); _errorScroll.AddChild(_error); _error.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        _errorScroll.Hide();
         var buttons = new HBoxContainer();
         column.AddChild(buttons);
         _buy = new Button
         {
             Text = "购买一件", FocusMode = FocusModeEnum.None,
-            SizeFlagsHorizontal = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, 40)
+            SizeFlagsHorizontal = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, 16)
         };
         _buy.Pressed += RequestBuySelected;
         buttons.AddChild(_buy);
         _cancel = new Button
         {
             Text = "离开", FocusMode = FocusModeEnum.None,
-            SizeFlagsHorizontal = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, 40)
+            SizeFlagsHorizontal = SizeFlags.ExpandFill, CustomMinimumSize = new Vector2(0, 16)
         };
         _cancel.Pressed += RequestCancel;
         buttons.AddChild(_cancel);
-        column.AddChild(new Label { Text = "↑ / ↓ 选择 · Enter 购买 · Esc 离开\n每次购买一件，确认后离开店铺。", Modulate = new Color("94a78f") });
+        column.AddChild(new Label { Text = "↑ / ↓ 选择 · Enter 购买 · Esc 离开\n确认购买一件后离店。", Modulate = new Color("94a78f") });
         _built = true;
     }
 }

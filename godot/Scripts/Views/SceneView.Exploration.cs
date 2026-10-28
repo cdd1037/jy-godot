@@ -11,11 +11,11 @@ public partial class SceneView
         for (var x = 20; x < Size.X; x += 32)
             DrawCircle(new Vector2(x, y), 0.65f, new Color("263c35"));
         var text = "江湖待启";
-        var width = _font.GetStringSize(text, fontSize: 34).X;
-        DrawString(_font, Size / 2 - new Vector2(width / 2, 12), text, fontSize: 34, modulate: new Color("c9b992"));
+        var width = _font.GetStringSize(text, fontSize: 16).X;
+        DrawString(_font, Size / 2 - new Vector2(width / 2, 6), text, fontSize: 16, modulate: new Color("c9b992"));
         text = "选择原版游戏目录，进入熟悉的江湖";
-        width = _font.GetStringSize(text, fontSize: 15).X;
-        DrawString(_font, Size / 2 + new Vector2(-width / 2, 26), text, fontSize: 15, modulate: new Color("83978b"));
+        width = _font.GetStringSize(text, fontSize: 8).X;
+        DrawString(_font, Size / 2 + new Vector2(-width / 2, 13), text, fontSize: 8, modulate: new Color("83978b"));
     }
 
     private void DrawExploration()

@@ -185,9 +185,8 @@ public partial class DialoguePanel : Control
     private void LayoutCanvas()
     {
         if (!_built || Size.X <= 0 || Size.Y <= 0) return;
-        var scale = Math.Min(Size.X / 320f, Size.Y / 200f);
-        _canvas.Scale = new Vector2(scale, scale);
-        _canvas.Position = (Size - new Vector2(320, 200) * scale) / 2;
+        _canvas.Position = Vector2.Zero;
+        _canvas.Size = Size;
     }
 
     private static StyleBoxFlat FrameStyle() => new()

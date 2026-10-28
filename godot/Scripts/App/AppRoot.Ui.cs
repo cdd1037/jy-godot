@@ -17,7 +17,7 @@ public partial class AppRoot
 
     private void BuildUi()
     {
-        var theme = new Theme { DefaultFont = new SystemFont { FontNames = ["Microsoft YaHei", "Noto Sans CJK SC"] }, DefaultFontSize = 15 };
+        var theme = new Theme { DefaultFont = new SystemFont { FontNames = ["Microsoft YaHei", "Noto Sans CJK SC"] }, DefaultFontSize = 8 };
         theme.SetColor("font_color", "Label", new Color("ddd7c5"));
         theme.SetColor("font_color", "Button", new Color("e6dfcc"));
         theme.SetColor("font_hover_color", "Button", Colors.White);
@@ -40,26 +40,29 @@ public partial class AppRoot
         _gameHeader = header; header.Visible = false;
         page.AddChild(header);
         var title = new Label { Text = "金庸群侠传", SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        title.AddThemeFontSizeOverride("font_size", 30);
+        title.AddThemeFontSizeOverride("font_size", 14);
         title.AddThemeColorOverride("font_color", new Color("e6d2a4"));
         header.AddChild(title);
         _menuButton = new Button { Name = "OpenGameMenu", Text = "菜单（Esc）", FocusMode = FocusModeEnum.None };
         _menuButton.Pressed += () => _menuController.OpenGameMenu();
         header.AddChild(_menuButton);
         var body = new HBoxContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
-        body.AddThemeConstantOverride("separation", 20);
+        body.AddThemeConstantOverride("separation", 4);
         page.AddChild(body);
         var mapPanel = new PanelContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
         mapPanel.AddThemeStyleboxOverride("panel", new StyleBoxFlat { BgColor = new Color("101c1a") });
         body.AddChild(mapPanel);
-        _world = new SceneView { Name = "WorldLayer", CustomMinimumSize = new Vector2(500, 400) };
+        _world = new SceneView { Name = "WorldLayer", CustomMinimumSize = new Vector2(128, 100) };
         _viewHost = new(_world);
         mapPanel.AddChild(_world);
         _dialogue = new DialoguePanel { Name = "DialogueOverlay" };
         _dialogue.ContinueRequested += ConfirmDialogue;
         _dialogue.ChoiceRequested += (token, option) => RespondToChoice(token, option);
         _dialogue.ChoiceCancelRequested += token => RespondToChoice(token, -1);
-        _world.AddChild(_dialogue);
+        // Dialogue uses the same 320x200 root design space, even when a debug
+        // or battle sidebar narrows the map view.
+        _dialogue.ZIndex = 80;
+        AddChild(_dialogue);
         _audio = new AudioStreamPlayer { Name = "SceneAudio" };
         AddChild(_audio);
         _world.MovementAttempted += result =>
@@ -67,10 +70,10 @@ public partial class AppRoot
             RecordSmokeMovement(result);
             UpdateSceneInfo();
         };
-        var sidePanel = new PanelContainer { CustomMinimumSize = new Vector2(280, 0) };
+        var sidePanel = new PanelContainer { CustomMinimumSize = new Vector2(95, 0) };
         _sidePanel = sidePanel;
         sidePanel.Visible = false;
-        sidePanel.AddThemeStyleboxOverride("panel", Box("192720", 12));
+        sidePanel.AddThemeStyleboxOverride("panel", Box("192720", 2));
         body.AddChild(sidePanel);
         var scroll = new ScrollContainer
         {
@@ -79,36 +82,38 @@ public partial class AppRoot
         };
         sidePanel.AddChild(scroll);
         var side = new VBoxContainer { SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        side.AddThemeConstantOverride("separation", 9);
+        side.AddThemeConstantOverride("separation", 2);
         scroll.AddChild(side);
         side.AddChild(Caption("当前场景"));
         _sceneName = new Label { Text = "等待导入", AutowrapMode = TextServer.AutowrapMode.WordSmart };
-        _sceneName.AddThemeFontSizeOverride("font_size", 24);
+        _sceneName.AddThemeFontSizeOverride("font_size", 12);
         side.AddChild(_sceneName);
-        _coordinates = new Label { Text = "坐标  —  /  朝向  —", Modulate = new Color("aabcaa") };
+        _coordinates = new Label { Text = "坐标  —  /  朝向  —", AutowrapMode = TextServer.AutowrapMode.WordSmart,
+            Modulate = new Color("aabcaa") };
         side.AddChild(_coordinates);
         _explorationPanel = new VBoxContainer { Name = "ExplorationControls", SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        _explorationPanel.AddThemeConstantOverride("separation", 9);
+        _explorationPanel.AddThemeConstantOverride("separation", 2);
         ComposeGameplayComponents(side);
         side.AddChild(_explorationPanel);
         _explorationPanel.AddChild(new HSeparator());
         _explorationPanel.AddChild(Caption("资源库与场景预览"));
         var numberRow = new HBoxContainer();
         numberRow.AddChild(new Label { Text = "场景编号", SizeFlagsHorizontal = SizeFlags.ExpandFill });
-        _sceneNumber = new SpinBox { MinValue = 0, MaxValue = 99, Value = 70, CustomMinimumSize = new Vector2(90, 0) };
+        _sceneNumber = new SpinBox { MinValue = 0, MaxValue = 99, Value = 70, CustomMinimumSize = new Vector2(35, 0) };
         numberRow.AddChild(_sceneNumber);
         _explorationPanel.AddChild(numberRow);
-        _importButton = new Button { Text = "导入完整原版资源库", CustomMinimumSize = new Vector2(0, 44), FocusMode = FocusModeEnum.None };
+        _importButton = new Button { Text = "导入完整原版资源库", CustomMinimumSize = new Vector2(0, 14),
+            AutowrapMode = TextServer.AutowrapMode.WordSmart, FocusMode = FocusModeEnum.None };
         _importButton.Pressed += () => ChooseFolder(false);
         _explorationPanel.AddChild(_importButton);
-        _openButton = new Button { Text = "打开已有资源库", CustomMinimumSize = new Vector2(0, 40), FocusMode = FocusModeEnum.None };
+        _openButton = new Button { Text = "打开已有资源库", CustomMinimumSize = new Vector2(0, 14), FocusMode = FocusModeEnum.None };
         _openButton.Pressed += () => ChooseFolder(true);
         _explorationPanel.AddChild(_openButton);
-        _previewButton = new Button { Text = "预览此场景", Disabled = true, CustomMinimumSize = new Vector2(0, 36),
+        _previewButton = new Button { Text = "预览此场景", Disabled = true, CustomMinimumSize = new Vector2(0, 12),
             FocusMode = FocusModeEnum.None, TooltipText = "复用当前资源库，并重启此场景的游戏会话。不是游戏中的场景出口切换。" };
         _previewButton.Pressed += async () => await PreviewSceneAsync();
         _explorationPanel.AddChild(_previewButton);
-        var restart = new Button { Text = "重新开始", CustomMinimumSize = new Vector2(0, 38), FocusMode = FocusModeEnum.None };
+        var restart = new Button { Text = "重新开始", CustomMinimumSize = new Vector2(0, 12), FocusMode = FocusModeEnum.None };
         restart.Pressed += () =>
         {
             if (CurrentPackage is not { } package || _busy) return;
@@ -121,14 +126,14 @@ public partial class AppRoot
             catch (Exception error) { _ = ShowFailureAsync(error); }
         };
         _explorationPanel.AddChild(restart);
-        _bagButton = new Button { Text = "查看背包", CustomMinimumSize = new Vector2(0, 34), FocusMode = FocusModeEnum.None };
+        _bagButton = new Button { Text = "查看背包", CustomMinimumSize = new Vector2(0, 12), FocusMode = FocusModeEnum.None };
         _bagButton.Pressed += ShowInventory;
         _explorationPanel.AddChild(_bagButton);
         BuildSaveButtons(_explorationPanel);
-        var collision = new CheckButton { Text = "显示碰撞辅助", FocusMode = FocusModeEnum.None };
+        var collision = new CheckButton { Text = "碰撞辅助", FocusMode = FocusModeEnum.None };
         collision.Toggled += value => { _world.ShowCollision = value; _world.QueueRedraw(); };
         _explorationPanel.AddChild(collision);
-        _smoothMovement = new CheckButton { Text = "平滑移动（F2）", ButtonPressed = false, FocusMode = FocusModeEnum.None };
+        _smoothMovement = new CheckButton { Text = "平滑移动", TooltipText = "F2 切换平滑移动", ButtonPressed = false, FocusMode = FocusModeEnum.None };
         _smoothMovement.Toggled += value => _menuController.SetPreferences(_menuController.Preferences with { SmoothMovement = value });
         _explorationPanel.AddChild(_smoothMovement);
         _explorationPanel.AddChild(new Control { SizeFlagsVertical = SizeFlags.ExpandFill });
@@ -141,7 +146,8 @@ public partial class AppRoot
         page.AddChild(footer);
         _status = new Label { Text = "选择原版 DOS 游戏目录开始。", SizeFlagsHorizontal = SizeFlags.ExpandFill, TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis };
         footer.AddChild(_status);
-        _controlsHint = new Label { Text = "WASD 行走 · E / 空格 交互 · Enter 继续 · 滚轮缩放", Modulate = new Color("8fa38d") };
+        _controlsHint = new Label { Text = "WASD · E交互 · Esc菜单", TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis,
+            Modulate = new Color("8fa38d") };
         footer.AddChild(_controlsHint);
         _folder = new FileDialog { Access = FileDialog.AccessEnum.Filesystem, FileMode = FileDialog.FileModeEnum.OpenDir, UseNativeDialog = true, Title = "选择原版游戏目录" };
         _folder.DirSelected += async path =>
@@ -157,15 +163,15 @@ public partial class AppRoot
 
     private static StyleBoxFlat Box(string color, int radius)
     {
-        var box = new StyleBoxFlat { BgColor = new Color(color), ContentMarginLeft = 18, ContentMarginRight = 18, ContentMarginTop = 16, ContentMarginBottom = 16 };
+        var box = new StyleBoxFlat { BgColor = new Color(color), ContentMarginLeft = 4, ContentMarginRight = 4, ContentMarginTop = 3, ContentMarginBottom = 3 };
         box.SetCornerRadiusAll(radius);
         return box;
     }
 
     private static StyleBoxFlat ButtonBox(string color)
     {
-        var box = Box(color, 8);
-        box.ContentMarginTop = box.ContentMarginBottom = 8;
+        var box = Box(color, 2);
+        box.ContentMarginTop = box.ContentMarginBottom = 2;
         return box;
     }
 

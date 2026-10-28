@@ -46,20 +46,22 @@ public partial class AppRoot
         veil.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect); _savePanel.AddChild(veil);
         var center = new CenterContainer { MouseFilter = MouseFilterEnum.Ignore };
         center.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect); _savePanel.AddChild(center);
-        _saveCard = new PanelContainer { CustomMinimumSize = new Vector2(560, 0) };
+        _saveCard = new PanelContainer { CustomMinimumSize = new Vector2(280, 0) };
         center.AddChild(_saveCard);
-        var column = new VBoxContainer(); column.AddThemeConstantOverride("separation", 14); _saveCard.AddChild(column);
-        _saveTitle = new Label { Text = "载入进度" }; _saveTitle.AddThemeFontSizeOverride("font_size", 28); column.AddChild(_saveTitle);
-        _saveHint = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart }; column.AddChild(_saveHint);
+        var column = new VBoxContainer(); column.AddThemeConstantOverride("separation", 3); _saveCard.AddChild(column);
+        _saveTitle = new Label { Text = "载入进度" }; _saveTitle.AddThemeFontSizeOverride("font_size", 12); column.AddChild(_saveTitle);
+        _saveHint = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, MaxLinesVisible = 2,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis }; column.AddChild(_saveHint);
         for (var i = 0; i < _saveSlots.Length; i++)
         {
             var slot = i + 1;
-            var button = new Button { Name = $"Slot{slot}", CustomMinimumSize = new Vector2(520, 64), Alignment = HorizontalAlignment.Left,
+            var button = new Button { Name = $"Slot{slot}", CustomMinimumSize = new Vector2(272, 32), Alignment = HorizontalAlignment.Left,
                 TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis };
             button.Pressed += () => SelectSaveSlot(slot);
             column.AddChild(button); _saveSlots[i] = button;
         }
-        _saveError = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, Modulate = new Color("e6b89d") };
+        _saveError = new Label { AutowrapMode = TextServer.AutowrapMode.WordSmart, MaxLinesVisible = 2,
+            TextOverrunBehavior = TextServer.OverrunBehavior.TrimEllipsis, Modulate = new Color("e6b89d") };
         column.AddChild(_saveError);
         var actions = new HBoxContainer(); column.AddChild(actions);
         _saveCancel = new Button { Name = "Cancel", Text = "返回游戏", SizeFlagsHorizontal = SizeFlags.ExpandFill };
@@ -96,7 +98,7 @@ public partial class AppRoot
     private void DisplaySaveMenu()
     {
         var death = _shownLifecycle?.Kind == EventLifecycleKind.Death;
-        _saveCard.AddThemeStyleboxOverride("panel", Box(death ? "38201e" : "15231e", 12));
+        _saveCard.AddThemeStyleboxOverride("panel", Box(death ? "38201e" : "15231e", 2));
         _saveTitle.Text = death ? "胜败乃兵家常事" : _saving ? "保存进度" : "载入进度";
         _saveHint.Text = death ? "此番闯荡已经结束。载入存档，再赴江湖。" : _saving
             ? "选择一个位置保存当前进度。" : "选择存档继续游戏。";
@@ -154,7 +156,7 @@ public partial class AppRoot
     {
         _saveConfirmedAction = action;
         _saveConfirmation.Title = title; _saveConfirmation.DialogText = message;
-        _saveConfirmation.PopupCentered(new Vector2I(420, 160));
+        _saveConfirmation.PopupCentered(new Vector2I(220, 80));
     }
 
     private void TrySaveSlot(int slot)

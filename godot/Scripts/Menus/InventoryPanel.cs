@@ -62,18 +62,18 @@ public partial class InventoryPanel : Control
         }
 
         var column = new VBoxContainer { Name = "InventoryContents" };
-        column.AddThemeConstantOverride("separation", 12); _card.AddChild(column);
+        column.AddThemeConstantOverride("separation", 3); _card.AddChild(column);
         var header = new HBoxContainer(); column.AddChild(header);
         var title = new Label { Text = "行囊", SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        title.AddThemeFontSizeOverride("font_size", 28); header.AddChild(title);
+        title.AddThemeFontSizeOverride("font_size", 12); header.AddChild(title);
         _return = new Button { Name = "ReturnInventory", Text = "返回（Esc）", Disabled = confirming, FocusMode = FocusModeEnum.None };
         _return.Pressed += () => Emit(InventoryActionKind.Close); header.AddChild(_return);
 
         var body = new HBoxContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
-        body.AddThemeConstantOverride("separation", 18); column.AddChild(body);
+        body.AddThemeConstantOverride("separation", 6); column.AddChild(body);
         _items = new ItemList
         {
-            Name = "InventoryItems", CustomMinimumSize = new Vector2(330, 350),
+            Name = "InventoryItems", CustomMinimumSize = new Vector2(126, 116),
             SizeFlagsHorizontal = SizeFlags.ExpandFill, SizeFlagsVertical = SizeFlags.ExpandFill,
             FocusMode = FocusModeEnum.None, MouseFilter = confirming ? MouseFilterEnum.Ignore : MouseFilterEnum.Stop
         };
@@ -86,8 +86,15 @@ public partial class InventoryPanel : Control
         };
         body.AddChild(_items);
 
-        var details = new VBoxContainer { CustomMinimumSize = new Vector2(340, 0), SizeFlagsHorizontal = SizeFlags.ExpandFill };
-        details.AddThemeConstantOverride("separation", 12); body.AddChild(details);
+        var details = new VBoxContainer { CustomMinimumSize = new Vector2(148, 0), SizeFlagsHorizontal = SizeFlags.ExpandFill };
+        details.AddThemeConstantOverride("separation", 3);
+        var detailsScroll = new ScrollContainer
+        {
+            CustomMinimumSize = new Vector2(154, 116), SizeFlagsHorizontal = SizeFlags.ExpandFill,
+            SizeFlagsVertical = SizeFlags.ExpandFill, HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
+        };
+        details.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        body.AddChild(detailsScroll); detailsScroll.AddChild(details);
         details.AddChild(Wrapped("InventoryItemInfo", model.ItemDetails));
         details.AddChild(new HSeparator());
         details.AddChild(new Label { Text = "使用人物" });
@@ -104,18 +111,21 @@ public partial class InventoryPanel : Control
         _apply = new Button
         {
             Name = "ApplyItemToRole", Text = model.ApplyText, Disabled = confirming || !model.CanApply,
-            TooltipText = model.ApplyReason, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 40)
+            TooltipText = model.ApplyReason, FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 16)
         };
         _apply.Pressed += () => Emit(InventoryActionKind.ApplyToRole); details.AddChild(_apply);
         _use = new Button
         {
             Name = "UseItem", Text = "对面前的物件使用（E）", Disabled = confirming || !model.CanUseOnScene,
-            FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 40)
+            FocusMode = FocusModeEnum.None, CustomMinimumSize = new Vector2(0, 16)
         };
         _use.Pressed += () => Emit(InventoryActionKind.UseOnScene); details.AddChild(_use);
         if (!model.CanApply && !string.IsNullOrWhiteSpace(model.ApplyReason)) details.AddChild(Wrapped("InventoryEligibility", model.ApplyReason));
-        _message = Wrapped("InventoryMessage", model.Message); column.AddChild(_message);
-        column.AddChild(new Label { Text = "↑↓ / W S 选物品 · ←→ / A D 选人物 · Enter / 空格使用 · E 对面前物件使用", Modulate = new Color("a5b8a4") });
+        _message = Wrapped("InventoryMessage", model.Message);
+        var messageScroll = new ScrollContainer { CustomMinimumSize = new Vector2(0, 18), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        column.AddChild(messageScroll); messageScroll.AddChild(_message);
+        _message.SizeFlagsHorizontal = SizeFlags.ExpandFill;
+        column.AddChild(new Label { Text = "↑↓ 物品 · ←→ 人物 · Enter 使用 · E 交互", Modulate = new Color("a5b8a4") });
         if (model.Confirmation is { } confirmation) BuildConfirmation(confirmation, Emit);
         Show();
         if (IsInsideTree()) GrabFocus();
@@ -137,12 +147,15 @@ public partial class InventoryPanel : Control
         veil.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect); layer.AddChild(veil);
         var center = new CenterContainer { MouseFilter = MouseFilterEnum.Ignore };
         center.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect); layer.AddChild(center);
-        var card = new PanelContainer { CustomMinimumSize = new Vector2(500, 0) };
+        var card = new PanelContainer { CustomMinimumSize = new Vector2(260, 0) };
         card.AddThemeStyleboxOverride("panel", CardStyle()); center.AddChild(card);
-        var column = new VBoxContainer(); column.AddThemeConstantOverride("separation", 16); card.AddChild(column);
-        var title = new Label { Text = model.Title }; title.AddThemeFontSizeOverride("font_size", 23); column.AddChild(title);
-        column.AddChild(Wrapped("PracticeConfirmationMessage", model.Message));
-        var row = new HBoxContainer(); row.AddThemeConstantOverride("separation", 12); column.AddChild(row);
+        var column = new VBoxContainer(); column.AddThemeConstantOverride("separation", 4); card.AddChild(column);
+        var title = new Label { Text = model.Title }; title.AddThemeFontSizeOverride("font_size", 11); column.AddChild(title);
+        var confirmationScroll = new ScrollContainer { CustomMinimumSize = new Vector2(248, 42), HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled };
+        column.AddChild(confirmationScroll);
+        var confirmationText = Wrapped("PracticeConfirmationMessage", model.Message);
+        confirmationText.SizeFlagsHorizontal = SizeFlags.ExpandFill; confirmationScroll.AddChild(confirmationText);
+        var row = new HBoxContainer(); row.AddThemeConstantOverride("separation", 3); column.AddChild(row);
         _cancelConfirm = new Button { Name = "CancelPractice", Text = "取消", SizeFlagsHorizontal = SizeFlags.ExpandFill, FocusMode = FocusModeEnum.None };
         _cancelConfirm.Pressed += () => emit(InventoryActionKind.CancelPractice, -1); row.AddChild(_cancelConfirm);
         _confirm = new Button { Name = "ConfirmPractice", Text = "确认", SizeFlagsHorizontal = SizeFlags.ExpandFill, FocusMode = FocusModeEnum.None };
@@ -158,26 +171,26 @@ public partial class InventoryPanel : Control
         veil.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect); AddChild(veil);
         var margin = new MarginContainer { MouseFilter = MouseFilterEnum.Ignore };
         margin.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-        foreach (var edge in new[] { "left", "right", "top", "bottom" }) margin.AddThemeConstantOverride("margin_" + edge, 24);
+        foreach (var edge in new[] { "left", "right", "top", "bottom" }) margin.AddThemeConstantOverride("margin_" + edge, 4);
         AddChild(margin);
         var center = new CenterContainer { MouseFilter = MouseFilterEnum.Ignore }; margin.AddChild(center);
-        _card = new PanelContainer { CustomMinimumSize = new Vector2(750, 520) };
+        _card = new PanelContainer { CustomMinimumSize = new Vector2(304, 190) };
         _card.AddThemeStyleboxOverride("panel", CardStyle()); center.AddChild(_card);
         _built = true;
     }
 
     private static Label Wrapped(string name, string text) => new()
     {
-        Name = name, Text = text, CustomMinimumSize = new Vector2(0, 42), AutowrapMode = TextServer.AutowrapMode.WordSmart
+        Name = name, Text = text, CustomMinimumSize = new Vector2(0, 0), AutowrapMode = TextServer.AutowrapMode.WordSmart
     };
 
     private static StyleBoxFlat CardStyle()
     {
         var style = new StyleBoxFlat
         {
-            BgColor = new Color("192720"), ContentMarginLeft = 20, ContentMarginRight = 20,
-            ContentMarginTop = 18, ContentMarginBottom = 18
+            BgColor = new Color("192720"), ContentMarginLeft = 4, ContentMarginRight = 4,
+            ContentMarginTop = 4, ContentMarginBottom = 4
         };
-        style.SetCornerRadiusAll(12); return style;
+        style.SetCornerRadiusAll(2); return style;
     }
 }
