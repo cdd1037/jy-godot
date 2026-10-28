@@ -20,7 +20,18 @@ public partial class AppRoot
     private readonly HashSet<string> _battlePresentationSprites = [];
     private BattleSession? _observedPresentationBattle;
     private long _observedPresentationToken;
-    private int _battlePresentationFrames, _battleItemConfirmations;
+    private int _battlePresentationFrames, _battleItemConfirmations, _battleResultConfirmations;
+
+    private void AttachBattleDiagnostics(BattleController controller)
+    {
+        controller.ActionExecuted += action =>
+        {
+            if (!_battleSmoke) return;
+            if (action == BattleActionKind.SelectMove) _battleMoves++;
+            else if (action == BattleActionKind.SelectAttack) _battleAttacks++;
+        };
+        controller.ResultConfirmed += () => _battleResultConfirmations++;
+    }
 
     private void AdvanceBattleSmoke()
     {
@@ -61,7 +72,7 @@ public partial class AppRoot
                     _battleSmokeOutcome = battle.Outcome;
                     _battleChecks++; _battleSmokeStage = 3;
                 }
-                if (BattleResultsVisible) _battleResultsContinue.EmitSignal(BaseButton.SignalName.Pressed);
+                if (_battleController.ResultsOpen) _battleController.Results.ContinueButton.EmitSignal(BaseButton.SignalName.Pressed);
                 else PressBattleButton("返回场景，继续剧情");
                 return;
             }
@@ -127,7 +138,7 @@ public partial class AppRoot
 
     private bool PressBattleButton(string text)
     {
-        var button = _battleControls.GetChildren().OfType<Button>().FirstOrDefault(candidate => candidate.Text == text);
+        var button = _battleController.Actions.GetChildren().OfType<Button>().FirstOrDefault(candidate => candidate.Text == text);
         if (button is null || button.Disabled) { _ = FinishSmokeAsync(false, $"Battle UI action unavailable: {text}"); return false; }
         button.EmitSignal(BaseButton.SignalName.Pressed);
         return true;

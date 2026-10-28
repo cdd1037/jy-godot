@@ -19,9 +19,9 @@ public partial class AppRoot
     private bool SaveMenuVisible => _savePanel?.Visible == true;
 
     private SaveGameStore SaveStore() => new(_savesDirectory,
-        _package?.Library is { } library ? [library.Directory] : []);
+        CurrentPackage?.Library is { } library ? [library.Directory] : []);
 
-    private bool CanOpenSaveMenu => !_busy && _package?.Library is not null &&
+    private bool CanOpenSaveMenu => !_busy && CurrentPackage?.Library is not null &&
         _world.Session is { CanSave: true } && !_world.IsMoving && !SaveMenuVisible &&
         _inventoryDialog is null && !_folder.Visible;
 
@@ -162,7 +162,7 @@ public partial class AppRoot
         {
             var session = _world.Session ?? throw new InvalidOperationException("No game is running.");
             if (_world.IsMoving || !session.CanSave) throw new InvalidOperationException("请等待行动或剧情结束后再保存。");
-            var library = _package?.Library ?? throw new InvalidOperationException("Saving requires the shared resource library.");
+            var library = CurrentPackage?.Library ?? throw new InvalidOperationException("Saving requires the shared resource library.");
             SaveStore().Save(slot, SaveGameDocument.Create(session.CaptureSnapshot(), library, _storyOverlay,
                 $"{(session.IsWorld ? "江湖世界" : session.Scene.Name)} · 已行走 {session.Player.Steps} 格"));
             CloseSaveMenu();
@@ -174,16 +174,15 @@ public partial class AppRoot
     {
         try
         {
-            var library = _package?.Library ?? throw new InvalidOperationException("Loading requires the shared resource library.");
+            var library = CurrentPackage?.Library ?? throw new InvalidOperationException("Loading requires the shared resource library.");
             var document = SaveStore().Read(slot);
             var restored = SaveGameLoader.Restore(library, document);
             var old = _world.Session;
             // LoadPackage prepares all textures before committing. Any failure above or
             // during preparation leaves the live game and lifecycle request untouched.
-            _world.LoadPackage(restored.View, restored.Session);
-            _package = restored.View; _storyOverlay = document.Overlay;
+            _viewHost.Load(restored.View, restored.Session);
+            _storyOverlay = document.Overlay;
             old?.RetireForReplacement();
-            ResetBattleHostAfterLoad();
             _audio.Stop(); _dialogue.Present(null);
             _shownLifecycle = null; CloseSaveMenu();
             _sceneNumber.Value = restored.Session.World.CurrentSceneId;
@@ -197,19 +196,6 @@ public partial class AppRoot
             // Do not dismiss a death/load instruction or continue its old event.
             return false;
         }
-    }
-
-    private void ResetBattleHostAfterLoad()
-    {
-        CloseBattleResults();
-        StopBattleAudio(releaseCachedStreams: true);
-        _shownBattle = null; _shownBattleActor = null; _shownBattlePhase = null; _battleReturnView = null;
-        _shownBattlePresenting = false; _shownBattleConfirmation = null;
-        _shownBattleRound = -1;
-        _battleUiError = null; _battleInputMode = BattleInputMode.None;
-        _battleControls.Hide();
-        foreach (var control in _explorationControls) control.Show();
-        SetBattleInputMode(BattleInputMode.None);
     }
 
     private void CloseSaveMenu()

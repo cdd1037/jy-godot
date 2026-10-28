@@ -5,13 +5,15 @@ namespace JinYong.Host;
 public partial class AppRoot : Control
 {
     private SceneView _world = null!;
+    private GameViewHost _viewHost = null!;
+    private BattleController _battleController = null!;
     private bool _busy;
     private bool _finishing;
 
     public override void _Process(double delta)
     {
         _world.Advance(delta);
-        AdvanceBattleHost(delta);
+        _battleController.Advance(delta);
         CompletePendingTravel();
         PresentLifecycleMenu();
         BindStory();
@@ -22,7 +24,7 @@ public partial class AppRoot : Control
 
     public override void _ExitTree()
     {
-        StopBattleAudio(releaseCachedStreams: true);
+        _battleController?.Dispose();
         _audio.Stop();
         _audio.Stream = null;
         foreach (var stream in _audioStreams) stream.Dispose();

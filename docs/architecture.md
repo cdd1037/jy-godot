@@ -15,7 +15,13 @@ Godot / Game.Tools / Game.Tests ──→ 上述所需项目
 
 本轮只新增 `Game.Importing` 一个子项目。Battle 与 Event 留在 Core 的职责目录，MOD 使用 Content 的共享文档，不分别建立 csproj。`BattleSession` 将出战、回合、移动和武功分别放入 `Roster` / `Turns` / `Movement` / `Magic` 分部；`EventRunner` 按 `ControlFlow` / `Presentation` / `Timing` / `Persistence` 分部，合同与接口拆为 `EventContracts.cs` 和 `IEventWorld.cs`。这些都是同一个类型的源文件整理，没有增加会话副本或第二 VM。
 
-Godot 脚本分为 `Scripts/App` 的入口与宿主流程、`Scripts/Battle` 的战斗控制/音效、`Scripts/Views` 的视图与对话，以及 `Scripts/Diagnostics` 的冒烟驱动。`AppRoot` 按启动、UI、内容、输入、剧情、背包、存档、旅行拆分；`SceneView` 按资源准备、探索、世界和战斗绘制拆分。主场景仍为 `Scenes/AppRoot.tscn`，绑定 `Scripts/App/AppRoot.cs` 并保留原脚本 UID。
+Godot 脚本分为 `Scripts/App` 的根入口与装配、`Scripts/Battle` 的独立战斗组件、`Scripts/Views` 的视图宿主/绘制/对话，以及 `Scripts/Diagnostics` 的冒烟驱动。主场景仍为 `Scenes/AppRoot.tscn`，绑定 `Scripts/App/AppRoot.cs` 并保留原脚本 UID。`SceneView` 按资源准备、探索、世界和战斗绘制保留内聚分部；背包、存档等仍是 AppRoot 分部，未声称全部根功能已经组件化。
+
+`BattleController` 协调视图切换、AI 节奏、呈现与结算，`BattleCommandRouter` 校验有类型的意图与上下文、委托 Core 并管理选格。`BattleActionPanel` 只读模型并发意图，`BattleActionModelFactory` 纯构建模型/状态文案；`BattleResultsPanel` 只读结果模型并发确认，`BattleResultsFormatter` 只格式化冻结数据；`BattleAudioPlayer` 独立管理双播放器与缓存生命周期。Battle 目录没有 AppRoot partial，不通过全局根上下文取得依赖。
+
+`GameViewHost` 是绑定 `ScenePackage` 与 `SceneView` 的唯一提交入口。加载成功才发布新 Package/Session，并以 `SessionChanged` 通知控制器自行重置，失败保留当前绑定。`AppRoot.Composition` 创建组件、接模式与输入确认事件，并管理显式探索控件容器；根不再持有战斗 UI 字段或直接分支处理战斗动作。
+
+诊断通过控制器只读接口及 `ActionExecuted` / `ResultConfirmed` 订阅计数，正式组件不读取 `_smoke`。独立组件文件名应与主类型一致；partial 只服务同一类型的内聚实现，避免把业务模块铺成 AppRoot 分部，也不引入全能 Context 或委托袋。src 项目边界未因此改变。
 
 ## 中央库与导入
 
@@ -39,7 +45,7 @@ Godot 脚本分为 `Scripts/App` 的入口与宿主流程、`Scripts/Battle` 的
 
 `assets/palette.rgb6` 保存 VGA 调色板，通道按 `(v << 2) | (v >> 4)` 展开；共享图集和索引/覆盖数据位于 `assets/sprites/`。有效色号 0 不被自动当作透明。
 
-`assets/source/` 按内容哈希缓存白名单原始资源；`data/source-index.json` 保存原始文件名、`sha256`、`size`、`storage`、`kind`。音效保留 `.wav` 后缀，音乐保留 `.xmi`，其他源数据使用 `.bin`。`data/audio.json` 分别索引事件音效、攻击音效和音乐。事件 WAV 已接通，新增战斗代码按呈现计划的预载/开始指令驱动独立攻击与效果播放器，缓存随资源库切换释放；XMI 音乐仍未播放。新增音效代码尚未运行验收，缓存资源不证明对应呈现可用。
+`assets/source/` 按内容哈希缓存白名单原始资源；`data/source-index.json` 保存原始文件名、`sha256`、`size`、`storage`、`kind`。音效保留 `.wav` 后缀，音乐保留 `.xmi`，其他源数据使用 `.bin`。`data/audio.json` 分别索引事件音效、攻击音效和音乐。事件 WAV 已接通；战斗控制器取出 Core 声音队列并交给独立 `BattleAudioPlayer`，按预载/开始指令驱动攻击与效果播放器，缓存随资源库切换或节点退出释放。XMI 音乐仍未播放。新增音效及组件接线尚未运行验收，缓存资源不证明对应呈现可用。
 
 ## 移动与呈现
 
@@ -84,4 +90,4 @@ OpenLegend 只用于研究，以下是其源码或证据路径，不是工程构
 
 格式测试、真实资源剧情验证和 DOS 程序动态差分是不同层级。当前不声称已完成 DOS 逐帧动态对齐或整个原版游戏复刻。
 
-新增战斗行为及本轮项目拆分、Godot 脚本移动均未运行构建、测试或验收，也未重新导入资源。既有 427 项测试与历史宿主冒烟只对应整理前的版本，不能证明本轮程序集依赖、场景绑定或功能已经通过。
+新增战斗行为及本轮项目拆分、Godot 脚本移动、类级重构与根装配均未运行构建、测试或画面验收，也未重新导入资源。既有 427 项测试与历史宿主冒烟只对应整理前的版本，不能证明本轮程序集依赖、场景绑定、组件生命周期或功能已经通过。

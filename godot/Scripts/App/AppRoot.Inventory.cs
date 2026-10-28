@@ -13,7 +13,7 @@ public partial class AppRoot
     private void ShowInventory()
     {
         if (_world.Session is not { CanSave: true } session || _world.IsMoving || SaveMenuVisible ||
-            _package?.Story is not { } story || _inventoryDialog is not null) return;
+            CurrentPackage?.Story is not { } story || _inventoryDialog is not null) return;
         var dialog = new AcceptDialog { Title = "行囊" };
         dialog.GetOkButton().Text = "返回";
         _inventoryDialog = dialog;

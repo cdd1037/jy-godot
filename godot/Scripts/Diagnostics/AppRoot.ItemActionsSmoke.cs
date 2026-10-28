@@ -38,7 +38,7 @@ public partial class AppRoot
             }
             if (_itemActionStage == 0)
             {
-                if (!session.CanSave || session.BattleResources is null || _package?.Library is null) return;
+                if (!session.CanSave || session.BattleResources is null || CurrentPackage?.Library is null) return;
                 if (session.World.CurrentSceneId != 70 || session.Story?.Programs.ContainsKey(11001) != true)
                     throw new InvalidOperationException("Item-actions smoke requires the original library and BattleDemo overlay in scene 70.");
                 PrepareItemActionsFixture(session); ShowInventory(); _itemActionStage = 1; return;
@@ -93,7 +93,7 @@ public partial class AppRoot
             {
                 if (_itemActionStage != 13 || battle.Outcome != BattleOutcome.Victory)
                     throw new InvalidOperationException("The prepared battle ended before every new action was exercised.");
-                if (BattleResultsVisible) _battleResultsContinue.EmitSignal(BaseButton.SignalName.Pressed);
+                if (_battleController.ResultsOpen) _battleController.Results.ContinueButton.EmitSignal(BaseButton.SignalName.Pressed);
                 else PressBattleButton("返回场景，继续剧情");
                 return;
             }
@@ -109,7 +109,7 @@ public partial class AppRoot
             if (_itemActionStage == 7)
             {
                 if (_itemActionSupport is not { Action: BattleSupportAction.Medicine, Amount: > 0 })
-                    throw new InvalidOperationException($"Medical targeting did not produce actual healing: result={battle.LastSupportResult}, mode={_battleInputMode}, selected={_world.SelectedBattleCell}, active={actor.Position}, error={battle.LastError}.");
+                    throw new InvalidOperationException($"Medical targeting did not produce actual healing: result={battle.LastSupportResult}, mode={_battleController.SelectionMode}, selected={_world.SelectedBattleCell}, active={actor.Position}, error={battle.LastError}.");
                 _itemActionChecks++;
                 PressBattleButton("解毒：点击队友或自己"); SendBattleMouse(actor.Position); _itemActionStage = 8; return;
             }
@@ -119,7 +119,7 @@ public partial class AppRoot
                     _itemActionActor!.Role[RoleWords.Poison] != 0) throw new InvalidOperationException("Detox targeting did not clear the shared actor's poison.");
                 _itemActionChecks++;
                 SelectBattleSmokeItem(_actionMedicine);
-                _battleControls.GetNode<Button>("UseBattleItem").EmitSignal(BaseButton.SignalName.Pressed);
+                _battleController.Actions.GetNode<Button>("UseBattleItem").EmitSignal(BaseButton.SignalName.Pressed);
                 _itemActionStage = 9; return;
             }
             if (_itemActionStage == 9)
@@ -147,7 +147,7 @@ public partial class AppRoot
                 if (!battle.CanTargetThrownItem(_actionThrown, enemy.Position))
                 { MoveItemSmokeToward(battle, actor, enemy); return; }
                 SelectBattleSmokeItem(_actionThrown);
-                _battleControls.GetNode<Button>("UseBattleItem").EmitSignal(BaseButton.SignalName.Pressed);
+                _battleController.Actions.GetNode<Button>("UseBattleItem").EmitSignal(BaseButton.SignalName.Pressed);
                 SendBattleMouse(enemy.Position); _itemActionChecks++; _itemActionStage = 13;
             }
         }
@@ -188,7 +188,7 @@ public partial class AppRoot
 
     private void SelectBattleSmokeItem(int id)
     {
-        var items = _battleControls.GetNode<OptionButton>("BattleItem");
+        var items = _battleController.Actions.GetNode<OptionButton>("BattleItem");
         var index = items.GetItemIndex(id);
         if (index < 0) throw new InvalidOperationException("Battle fixture item missing.");
         items.Select(index); items.EmitSignal(OptionButton.SignalName.ItemSelected, (long)index);

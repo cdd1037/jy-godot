@@ -3,10 +3,8 @@ using JinYong.Core.Session;
 
 namespace JinYong.Host;
 
-public sealed record BattleResultSection(string Title, IReadOnlyList<string> Lines);
-
 /// <summary>Formats frozen settlement values; session data supplies names only.</summary>
-public static class BattleResultsText
+public static class BattleResultsFormatter
 {
     private static readonly (int Attribute, string Name)[] GrowthAttributes =
     [
@@ -19,6 +17,16 @@ public static class BattleResultsText
         (RoleWords.Knowledge, "武学常识"), (RoleWords.Morality, "道德"),
         (RoleWords.AttackWithPoison, "攻击带毒")
     ];
+
+    public static BattleResultsModel BuildModel(GameSession session, BattleSettlementResult result,
+        string battleName, bool victory, bool hasLivingFriendly)
+    {
+        ArgumentNullException.ThrowIfNull(battleName);
+        var sections = Build(session, result);
+        var summary = battleName + (victory && hasLivingFriendly
+            ? $"\n存活队员每人分得经验 {result.SharedExperience}。" : "\n休整之后，继续闯荡江湖。");
+        return new(victory ? "战斗胜利" : "战斗落败", summary, sections);
+    }
 
     public static IReadOnlyList<BattleResultSection> Build(GameSession session, BattleSettlementResult result)
     {

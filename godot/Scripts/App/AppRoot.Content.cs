@@ -8,7 +8,7 @@ namespace JinYong.Host;
 
 public partial class AppRoot
 {
-    private ScenePackage? _package;
+    private ScenePackage? CurrentPackage => _viewHost?.Package;
     private StoryDocument? _storyOverlay;
     private bool _openPackage;
     private string _lastSource = "";
@@ -26,7 +26,7 @@ public partial class AppRoot
     {
         _busy = busy;
         _importButton.Disabled = _openButton.Disabled = busy;
-        _previewButton.Disabled = busy || _package?.Library is null;
+        _previewButton.Disabled = busy || CurrentPackage?.Library is null;
     }
 
     private async Task ImportAsync(string source)
@@ -63,7 +63,7 @@ public partial class AppRoot
 
     private async Task PreviewSceneAsync()
     {
-        if (_busy || _package?.Library is not { } library) return;
+        if (_busy || CurrentPackage?.Library is not { } library) return;
         SetBusy(true);
         try
         {
@@ -81,10 +81,8 @@ public partial class AppRoot
     {
         _audio.Stop();
         _dialogue.Present(null);
-        _world.LoadPackage(package);
-        ResetBattleHostAfterLoad();
+        _viewHost.Load(package);
         GetViewport().GuiGetFocusOwner()?.ReleaseFocus();
-        _package = package;
         _sceneNumber.Value = package.Document.LegacySceneId;
         UpdateSceneInfo();
         BindStory();

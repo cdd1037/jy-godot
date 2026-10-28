@@ -70,7 +70,7 @@ public partial class AppRoot
             switch (_saveSmokeStage)
             {
                 case 0:
-                    if (!_eventSmoke || _package?.Library is null || Directory.Exists(_savesDirectory))
+                    if (!_eventSmoke || CurrentPackage?.Library is null || Directory.Exists(_savesDirectory))
                         throw new InvalidOperationException("Save smoke requires EventDemo and a fresh dedicated saves directory.");
                     _saveSilver = session.Inventory.GetValueOrDefault(174);
                     Input.ActionPress("interact"); _smokeConfirmPressed = true;

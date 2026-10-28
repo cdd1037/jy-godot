@@ -26,17 +26,16 @@ public partial class AppRoot
     {
         if (_world.Session is not { } session) return;
         UpdateSceneInfo();
-        _controlsHint.Text = BattleResultsVisible ? "Enter / 空格继续剧情" : session.Battle is not null
+        _controlsHint.Text = _battleController.ResultsOpen ? "Enter / 空格继续剧情" : session.Battle is not null
             ? "鼠标选择行动与目标 · Esc 取消 · 滚轮缩放" : "WASD 行走 · E / 空格 交互 · Enter 继续 · 滚轮缩放";
-        _bagButton.Disabled = _busy || !session.CanSave || _world.IsMoving || _package?.Story is null;
+        _bagButton.Disabled = _busy || !session.CanSave || _world.IsMoving || CurrentPackage?.Story is null;
         UpdateSaveButtons();
-        if (session.Battle is { } battle) PlayBattlePresentationSounds(battle);
         var pending = session.Events?.Pending;
         _dialogue.Present(pending, pending is null ? null : _world.Portrait(pending.PortraitId),
-            pending is null ? null : _package?.Document.PortraitNames.GetValueOrDefault(pending.PortraitId));
+            pending is null ? null : CurrentPackage?.Document.PortraitNames.GetValueOrDefault(pending.PortraitId));
         foreach (var soundId in session.Events?.TakeSounds() ?? [])
         {
-            if (_package is not { } loadedPackage || !loadedPackage.Document.Sounds.TryGetValue(soundId, out var path))
+            if (CurrentPackage is not { } loadedPackage || !loadedPackage.Document.Sounds.TryGetValue(soundId, out var path))
                 throw new InvalidDataException($"Missing event sound {soundId}.");
             var stream = AudioStreamWav.LoadFromFile(loadedPackage.Resolve(path));
             if (stream is null) throw new InvalidDataException($"Invalid audio file {path}.");
@@ -45,7 +44,7 @@ public partial class AppRoot
             _audio.Play();
             _playedSounds.Add(soundId);
         }
-        if (BattleResultsVisible) _status.Text = "查看战果后，按 Enter / 空格或点击继续剧情。";
+        if (_battleController.ResultsOpen) _status.Text = "查看战果后，按 Enter / 空格或点击继续剧情。";
         else if (session.PendingLifecycle is not null) _status.Text = "请载入存档或退出游戏。";
         else if (session.Battle?.Presentation is { WaitingForConfirmation: true }) _status.Text = "按任意键或点击继续，关闭药效面板。";
         else if (session.Battle?.IsPresenting == true) _status.Text = "正在行动……";

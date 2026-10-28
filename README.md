@@ -6,6 +6,8 @@
 
 源码分为 `Game.Core` 游戏规则与状态、`Game.Content` 运行时加载/校验/存档，以及 `Game.Importing` 原版导入与编译，依赖单向指向 Core。Godot 保留导入按钮，因此也引用 Importing。本轮仅新增这一个子项目；战斗、事件和 MOD 暂不独立成程序集，文件分工见[工程结构](docs/project-layout.md)。
 
+战斗宿主已拆为独立控制器、命令路由、模型/面板和音效节点，由根装配连接；`GameViewHost` 统一提交视图绑定。Battle 目录不再使用 AppRoot 业务分部，背包、存档等仍保留为根分部。此次类级整理及接线同样未经构建、测试或画面验收，旧报告仅作历史记录。
+
 ## 开始运行
 
 需要 Godot **4.7.2 .NET** 和 **.NET 10 SDK**，Windows 优先，使用 GL Compatibility 渲染。Godot 可加入 PATH，也可通过 `run.ps1 -Godot` 指定可执行文件。

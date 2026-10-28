@@ -9,11 +9,10 @@ public partial class AppRoot
         if (_busy || _world.Session is not { IsTravelReady: true, PendingTravel: { } request } session) return;
         try
         {
-            var library = _package?.Library ?? throw new InvalidOperationException("Travel requires a complete resource library.");
+            var library = CurrentPackage?.Library ?? throw new InvalidOperationException("Travel requires a complete resource library.");
             var view = request.IsWorld ? library.OpenWorldView(session)
                 : library.OpenScene(request.SceneId, request.Position, validateSpawn: false) with { Story = session.Story };
-            _world.LoadPackage(view, session, request.Token);
-            _package = view;
+            _viewHost.Load(view, session, request.Token);
             if (!session.IsWorld) _sceneNumber.Value = session.World.CurrentSceneId;
             _heldDirections.Clear();
             GetViewport().GuiGetFocusOwner()?.ReleaseFocus();

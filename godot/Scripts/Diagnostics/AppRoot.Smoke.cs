@@ -78,9 +78,9 @@ public partial class AppRoot
         if (_world.IsMoving) return;
         if (_smokeIndex >= _smokeRoute.Count)
         {
-            var openingPassed = _package?.Story?.InitialProgramId is not { } initial ||
+            var openingPassed = CurrentPackage?.Story?.InitialProgramId is not { } initial ||
                 (_world.Session.Events!.CompletedPrograms.Count(id => id == initial) == 1 &&
-                 _world.Session.Scene.Events[_package.Story.InitialEventIndex][4] == -1 &&
+                 _world.Session.Scene.Events[CurrentPackage.Story.InitialEventIndex][4] == -1 &&
                  (_world.PlayOpening ? _smokePages.Count > 0 : _smokePages.Count == 0));
             _ = FinishSmokeAsync(openingPassed && _smokeMoves == _smokeRoute.Count - 1 && _smokeBlocks == 1 && _world.DrawnSprites > 0,
                 _world.PlayOpening ? "Opening completed through input confirmations; then walked and tested collision."
@@ -135,9 +135,9 @@ public partial class AppRoot
         }
         var report = new
         {
-            success, message, scene = _package?.Scene.Id, position = _world.Session?.Player.Position,
+            success, message, scene = CurrentPackage?.Scene.Id, position = _world.Session?.Player.Position,
             steps = _smokeMoves, blockedMoves = _smokeBlocks, lastBlock = _lastBlock,
-            drawnSprites = _world.DrawnSprites, frames = _smokeFrames, package = _package?.Directory
+            drawnSprites = _world.DrawnSprites, frames = _smokeFrames, package = CurrentPackage?.Directory
             , dialoguePages = _smokePages.Count, completedPrograms = _world.Session?.Events?.CompletedPrograms,
             playedSounds = _playedSounds, openingTrigger = _world.Session?.Scene.Events[0][4]
             , quickTapChecks = _smokeQuickTapChecks, smoothMovement = _world.SmoothMovement, playOpening = _world.PlayOpening
@@ -149,8 +149,8 @@ public partial class AppRoot
             battlePresentationFrames = _battlePresentationFrames,
             battlePresentationStages = _battlePresentationStages.Select(stage => stage.ToString()),
             battlePresentationSprites = _battlePresentationSprites,
-            battleItemConfirmations = _battleItemConfirmations, playedBattleSounds = _playedBattleSounds,
-            battleResultConfirmations = _battleResultsConfirmations,
+            battleItemConfirmations = _battleItemConfirmations, playedBattleSounds = _battleController.PlayedSounds,
+            battleResultConfirmations = _battleResultConfirmations,
             battleOutcome = _world.Session?.LastBattleOutcome,
             variables = _world.Session?.Variables, inventory = _world.Session?.Inventory,
             eventTrace = _world.Session?.Events?.Trace

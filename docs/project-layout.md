@@ -19,9 +19,9 @@ JinYong.Godot/
 ├── godot/                  Godot .NET 项目与呈现层
 │   ├── Scenes/AppRoot.tscn 主场景，继续绑定同一入口脚本 UID
 │   └── Scripts/
-│       ├── App/            AppRoot 入口、启动、UI、内容、输入、剧情、背包、存档与旅行
-│       ├── Battle/         AppRoot.Battle、Controls、Actions、Results、BattleAudio 与结果文字
-│       ├── Views/          SceneView、Assets、Exploration、World、Battle 与 DialoguePanel
+│       ├── App/            AppRoot 入口与 Composition 装配；保留启动、背包、存档等根分部
+│       ├── Battle/         独立 Controller、CommandRouter、面板、模型、格式器与 AudioPlayer
+│       ├── Views/          GameViewHost、SceneView 及其绘制/资源分部、DialoguePanel
 │       └── Diagnostics/    AppRoot 各项 Smoke 和 SmokeRoute
 ├── tools/Game.Tools/       导入、检查及诊断命令行工具
 ├── tests/Game.Tests/       核心、内容与真实资源验证
@@ -57,9 +57,27 @@ Godot 读取核心状态，绘制地图、对话和动画，提交输入并推�
 
 Content 中的 `GameLibrary` 按 `Loading`、`Scenes`、`Views` 分开加载校验、场景视图与世界/战场视图；主文件保留库自身的状态与入口。`Packages` 按资源清单、场景与图像、剧情文档、JSON 序列化及 `ScenePackage` 视图分组，文件移动保留原有类型命名空间和数据字段。
 
-Godot 主场景位置保持 `Scenes/AppRoot.tscn`，入口脚本路径改为 `Scripts/App/AppRoot.cs` 并保留原 UID。`Views` 内将资源准备和探索绘制从主 `SceneView` 分开，战斗和世界绘制仍是同一个视图的分部；`Diagnostics` 集中冒烟驱动代码，不改变正式入口与规则归属。
+Godot 主场景位置保持 `Scenes/AppRoot.tscn`，入口脚本路径改为 `Scripts/App/AppRoot.cs` 并保留原 UID。`Views` 内将资源准备和探索绘制从主 `SceneView` 分开，战斗和世界绘制仍是同一个视图的分部。`GameViewHost` 统一提交 `ScenePackage` 与 `SceneView` 的绑定，资源准备和加载成功才发布新视图，再通过 `SessionChanged` 通知战斗控制器重置。
 
-战斗宿主进一步按 `AppRoot.Battle` 主流程、`Controls` 控件、`Actions` 输入提交、`Results` 战果遮罩及 `BattleAudio` 音效分工。`BattleResultsText` 是同一 Host 内不依赖 Godot 类型的纯 C# 格式器，只把冻结结果转为中文分节；它不发奖励、不消费 RNG、不回读当前人物数值。Core 的目标查询提供合法范围、路径和影响格，SceneView 缓存绘制结果，Godot 不复制一套判定规则。
+Battle 目录没有 `AppRoot` 分部，采用明确的类级职责：
+
+| 类型 | 职责 |
+|---|---|
+| `BattleController` | 协调战斗视图、AI 节奏、呈现与结算阶段 |
+| `BattleCommandRouter` | 校验有类型的输入意图和旧上下文，委托 Core 执行动作，管理目标选择 |
+| `BattleActionPanel` / `BattleActionModel` | 读取模型绘制控件，发出意图，不直接调用 Core |
+| `BattleActionModelFactory` | 纯构建动作模型与状态文案 |
+| `BattleResultsPanel` / `BattleResultsModel` | 展示冻结战果模型并发出确认 |
+| `BattleResultsFormatter` | 纯 C# 生成结果模型和中文分节，不结算、不抽随机、不回读当前人物数值 |
+| `BattleAudioPlayer` | 独立 Node，拥有两个播放器、预载与库内缓存生命周期 |
+
+`AppRoot.Composition` 是根装配分部，创建这些组件并订阅模式/输入确认事件。探索按钮被明确的容器持有，不再按子节点顺序推断显示范围；AppRoot 不再保存战斗 UI 字段或直接处理战斗动作分支。Core 的目标查询提供合法范围、路径和影响格，SceneView 缓存绘制结果，Godot 不复制一套判定规则。
+
+行动模型只携带文本、选项、可用性和不透明的 `BattleActionToken`，不向面板暴露 `BattleSession` 或人物引用。命令路由器内部保存对应的战斗、行动者、阶段、回合和呈现标识，拒绝旧面板或旧回合发出的操作；重绑和重置会使旧标识失效。
+
+`Diagnostics` 保留准确命名的 `AppRoot.*Smoke` 测试驱动分部，通过 `BattleController` 的只读接口、`ActionExecuted` 和 `ResultConfirmed` 事件收集证据；正式组件不判断 `_smoke`。背包、存档等仍是根分部，尚未完成全部 AppRoot 功能组件化。
+
+独立组件的文件名等于其主类型名；partial 仅拆分同一类型的内聚实现，不作为按业务扩张 AppRoot 的方式。依赖应由构造参数和明确事件表达，不引入全能 Context 或委托袋。src 的三个项目边界保持不变。
 
 ## 新库与兼容代码
 
@@ -69,6 +87,6 @@ Godot 主场景位置保持 `Scenes/AppRoot.tscn`，入口脚本路径改为 `Sc
 
 正式入口为 `build.ps1` 构建和测试、`import.ps1` 一次导入全库、`run.ps1` 加载并运行。`-Scene` 选择预览起点，`-EventDemo` / `-StoryOverlay` 在内存应用剧情数据；没有按场景导出步骤，也不需要生成第二套基础资源。
 
-本轮源码整理及其后的战斗结算阶段、战果页、目标预览和旧按钮保护，均未重新导入资源，也未运行构建、测试或验收。历史 427 项测试及宿主冒烟是整理前的基线，不能证明移动后的脚本、程序集引用或新增流程已经通过。
+本轮源码整理、战斗结算阶段、战果页、目标预览、旧按钮保护及类级组件接线，均未重新导入资源，也未运行构建、测试或画面验收。历史 427 项测试及宿主冒烟是整理前的基线，不能证明移动后的脚本、程序集引用、组件生命周期或新增流程已经通过。
 
 资源库具体布局见 [中央资源库](resource-library.md)，提交与验证约定见 [参与开发](../CONTRIBUTING.md)。
