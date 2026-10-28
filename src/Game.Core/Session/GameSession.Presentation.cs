@@ -87,6 +87,7 @@ public sealed partial class GameSession
 
     internal void ResetPresentationForTravel()
     {
+        ResetAmbientAnimation();
         Camera = null; ScriptedMotion = null;
         PresentationRevision++;
     }

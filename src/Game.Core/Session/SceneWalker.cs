@@ -13,6 +13,7 @@ public sealed class SceneWalker
     private readonly HashSet<Direction> _blocked = [];
     private double _now, _start, _end, _repeatAt, _nextStepAt, _lastActivity;
     private bool _pending, _arrival, _attempted;
+    private double _idleElapsed;
 
     public SceneWalker(GameSession session, WalkingSettings? settings = null)
     {
@@ -35,6 +36,7 @@ public sealed class SceneWalker
     {
         if (!double.IsFinite(seconds) || seconds < 0) throw new ArgumentOutOfRangeException(nameof(seconds));
         _now += seconds;
+        _idleElapsed = Math.Min(seconds, 0.25);
         _attempted = false;
         if (_arrival && _now + 1e-10 >= _end)
         {
@@ -51,6 +53,7 @@ public sealed class SceneWalker
         _blocked.RemoveWhere(direction => !held.Contains(direction));
         if (!enabled)
         {
+            _session.CancelPlayerIdle();
             foreach (var direction in held) _blocked.Add(direction);
             _held.Clear();
             _pending = false;
@@ -77,6 +80,7 @@ public sealed class SceneWalker
             _repeatAt = _now;
         }
 
+        if (_held.Count > 0 || IsMoving) _session.CancelPlayerIdle();
         var due = _pending ? _nextStepAt : Math.Max(_nextStepAt, _repeatAt);
         if (!IsMoving && !_attempted && _held.Count > 0 && _now + 1e-10 >= due)
         {
@@ -94,7 +98,11 @@ public sealed class SceneWalker
             return result;
         }
         if (_held.Count == 0 && !IsMoving && _now - _lastActivity + 1e-10 >= Settings.StandingDelaySeconds)
+        {
             _session.StandAfterWalking();
+            _session.AdvancePlayerIdle(TimeSpan.FromSeconds(_idleElapsed));
+            _idleElapsed = 0;
+        }
         return null;
     }
 }

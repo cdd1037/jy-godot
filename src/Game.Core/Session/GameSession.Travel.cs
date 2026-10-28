@@ -20,7 +20,7 @@ public sealed partial class GameSession
     public bool IsTravelReady => PendingTravel is not null && _travelElapsed >= TravelFadeTime;
     public bool IsInputLocked => IsRetired || IsEventRunning || Battle is not null || PendingTravel is not null || _fadingIn;
     public int ShipPicture => new[] { 7430,7438,7446,7454 }[(int)(Travel?.Snapshot.ShipFacing ?? Direction.Up)] + _shipFrameOffset;
-    private int WorldPlayerPicture => new[] { 5002,5016,5030,5044 }[(int)Travel!.Snapshot.Facing] + _walkFrameOffset;
+    private int WorldPlayerPicture => _idlePicture ?? new[] { 5002,5016,5030,5044 }[(int)Travel!.Snapshot.Facing] + _walkFrameOffset;
 
     /// <summary>Single session clock for event, travel and battle presentation.</summary>
     public void Advance(TimeSpan elapsed)
@@ -45,6 +45,7 @@ public sealed partial class GameSession
             CompleteMovement();
             return;
         }
+        if (!IsWorld && !IsInputLocked) AdvanceSceneAnimation(elapsed);
         Events?.Advance(elapsed);
         if (_resolveAfterEvent && !IsEventRunning)
         {

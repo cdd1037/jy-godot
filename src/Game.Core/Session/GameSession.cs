@@ -100,6 +100,7 @@ public sealed partial class GameSession : IEventWorld
     {
         if (!Enum.IsDefined(direction)) throw new ArgumentOutOfRangeException(nameof(direction));
         if (IsInputLocked) return new(Player.Position, Player.Position, MovementBlock.Story);
+        CancelPlayerIdle();
         if (IsWorld) return TryMoveWorld(direction);
         _facing = direction;
         _picture = null;
@@ -157,6 +158,7 @@ public sealed partial class GameSession : IEventWorld
             return false;
         }
         var previousPicture = _picture;
+        CancelPlayerIdle();
         var previousWalkFrame = _walkFrameOffset;
         _picture = null;
         _walkFrameOffset = 0;
