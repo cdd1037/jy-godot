@@ -10,13 +10,14 @@
 
 | 改动 | 当前合同及尚未验收的行为 |
 |---|---|
+| 正式菜单与行囊 | 标题暂存会话不运行开场；Esc 探索菜单、核心医疗/解毒/辞别剧情、独立行囊与分步确认、存档父页返回、音乐与移动设置、F3 调试侧栏；诊断迁移到组件接口。未构建或运行测试/画面验收 |
 | 分阶段结算 | `PrepareBattleSettlement` 准备一次并冻结结果，重复准备复用结果，错误也缓存；最终 `FinishBattle` 才执行最后的伤毒处理并恢复剧情 |
 | 战果页 | 结果确定后自动出现遮罩；纯格式器显示友方经验、等级、成长、练功/武功及制作/材料，不显示敌人成长，不在经验提示门关闭时编造提示；Enter / 空格或“继续剧情”确认 |
 | 目标预览 | Core 查询复用动作合法性门与距离图；SceneView 缓存范围、影响格、移动路径及目标当前 HP/MP，Esc 清除；不消费 RNG、不预测伤害，确认仍由动作入口检查 |
 | 旧动作保护 | 控件捕获 battle、phase、actor、round 与 presentation token；同帧旧回调不能在换人或换阶段后对新人物行动 |
 | 独立战斗组件 | Battle 目录移除 AppRoot partial，使用 Controller、CommandRouter、只读模型/面板、Factory、`BattleResultsFormatter` 及独立音频 Node；src 项目边界不变 |
 | 视图提交与装配 | `GameViewHost` 唯一提交 Package/SceneView 绑定，加载成功才发布并通知 `SessionChanged`；根 Composition 组装组件、管理明确的探索容器和输入确认 |
-| 诊断接入 | 冒烟分部通过控制器只读接口及 `ActionExecuted` / `ResultConfirmed` 订阅结果；生产组件不判断 `_smoke`，背包/存档等仍为根分部 |
+| 诊断接入 | 冒烟分部通过控制器只读接口及 `ActionExecuted` / `ResultConfirmed` 订阅结果；生产组件不判断 `_smoke`；行囊已独立，存档仍为根分部 |
 | 六项原版转换 | 新增 `ExitMusic`、`Music`、`StatueAnimation`、`TournamentTrials`、`Ending`、`Shop`，源码成为 61 种标准命令/68 项编号映射；没有新 audit 结果，不推算完整编译数 |
 | 商店数据/续行 | RANGER entry 5 五条 30 字节记录，场景 1/3/40/60/61；2974 招呼、单件购买、2975/2976 反馈、收店与辅助事件 939，同一个 Runner |
 | 商店宿主/库存快照 | 独立 Controller/Panel/冻结模型，按 session+token 防旧动作，关闭同帧挡输入穿透；可选 `ShopStocks` 持久库存，无批量购买或出售 |

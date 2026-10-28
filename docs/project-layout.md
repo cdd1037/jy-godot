@@ -19,7 +19,8 @@ JinYong.Godot/
 ├── godot/                  Godot .NET 项目与呈现层
 │   ├── Scenes/AppRoot.tscn 主场景，继续绑定同一入口脚本 UID
 │   └── Scripts/
-│       ├── App/            AppRoot 入口与 Composition 装配；保留启动、背包、存档等根分部
+│       ├── App/            AppRoot 入口与 Composition 装配；保留启动、存档等根分部
+│       ├── Menus/          标题/探索菜单、独立行囊、人物状态与本机设置
 │       ├── Battle/         独立 Controller、CommandRouter、面板、模型、格式器与 AudioPlayer
 │       ├── Shops/          单件购买 Controller、面板、只读模型与工厂
 │       ├── Audio/          规范化音乐调度与 Windows WinMM GM 输出
@@ -82,7 +83,7 @@ Battle 目录没有 `AppRoot` 分部，采用明确的类级职责：
 
 行动模型只携带文本、选项、可用性和不透明的 `BattleActionToken`，不向面板暴露 `BattleSession` 或人物引用。命令路由器内部保存对应的战斗、行动者、阶段、回合和呈现标识，拒绝旧面板或旧回合发出的操作；重绑和重置会使旧标识失效。
 
-`Diagnostics` 保留准确命名的 `AppRoot.*Smoke` 测试驱动分部，通过 `BattleController` 的只读接口、`ActionExecuted` 和 `ResultConfirmed` 事件收集证据；正式组件不判断 `_smoke`。背包、存档等仍是根分部，尚未完成全部 AppRoot 功能组件化。
+`Diagnostics` 保留准确命名的 `AppRoot.*Smoke` 驱动，通过控制器只读接口和事件收集证据；正式组件不判断 `_smoke`。`Menus` 的 `GameMenuController` 与 `InventoryController` 分别拥有导航和行囊交互，展示模型不暴露核心会话。存档仍为根分部，尚未完成全部 AppRoot 功能组件化。标题启动、暂停和队伍菜单边界见[正式菜单](menus.md)。
 
 独立组件的文件名等于其主类型名；partial 仅拆分同一类型的内聚实现，不作为按业务扩张 AppRoot 的方式。依赖应由构造参数和明确事件表达，不引入全能 Context 或委托袋。src 的三个项目边界保持不变。
 

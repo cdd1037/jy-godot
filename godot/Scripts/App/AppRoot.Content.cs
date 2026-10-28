@@ -3,6 +3,7 @@ using JinYong.Content.Library;
 using JinYong.Content.Packages;
 using JinYong.Importing;
 using JinYong.Importing.Legacy;
+using JinYong.Core.Session;
 
 namespace JinYong.Host;
 
@@ -25,6 +26,7 @@ public partial class AppRoot
     private void SetBusy(bool busy)
     {
         _busy = busy;
+        _menuController.SetBusy(busy);
         _importButton.Disabled = _openButton.Disabled = busy;
         _previewButton.Disabled = busy || CurrentPackage?.Library is null;
     }
@@ -52,7 +54,7 @@ public partial class AppRoot
             _status.Text = "正在校验资源库…";
             var scene = (int)_sceneNumber.Value;
             var package = await Task.Run(() => ScenePackageReader.Load(directory, scene, storyOverlay: _storyOverlay));
-            ShowScene(package);
+            ShowScene(package, directPlay: _directPlay);
             using var config = new ConfigFile();
             config.SetValue("content", "source", _lastSource);
             config.SetValue("content", "package", package.Directory);
@@ -77,12 +79,17 @@ public partial class AppRoot
         finally { SetBusy(false); }
     }
 
-    private void ShowScene(ScenePackage package)
+    private void ShowScene(ScenePackage package, bool directPlay = true)
     {
+        var old = _world.Session;
+        var session = CreateSession(package, directPlay);
+        _viewHost.Load(package, session);
         _audio.Stop();
         _dialogue.Present(null);
-        _viewHost.Load(package);
-        GetViewport().GuiGetFocusOwner()?.ReleaseFocus();
+        old?.RetireForReplacement();
+        if (directPlay) _menuController.NotifyGameStarted();
+        else _menuController.ShowTitle();
+        if (!_menuController.IsOpen) GetViewport().GuiGetFocusOwner()?.ReleaseFocus();
         _sceneNumber.Value = package.Document.LegacySceneId;
         UpdateSceneInfo();
         BindStory();
@@ -90,10 +97,32 @@ public partial class AppRoot
         GD.Print($"SCENE_LOADED id={package.Scene.Id} sprites={package.Document.Sprites.Length} position={package.Scene.Spawn} library={package.Library is not null} overlay={_storyOverlay is not null}");
     }
 
+    private GameSession CreateSession(ScenePackage package, bool startProgram) => new(package.Scene, package.Story,
+        skipOpening: !_world.PlayOpening, worldMap: package.Library?.MainMap,
+        travelStart: package.Library?.GameData.TravelStart, battles: package.Library?.Battles,
+        startInitialProgram: startProgram);
+
+    private void StartNewGame()
+    {
+        if (_busy || CurrentPackage is not { } package) { _menuController.ResumeFromChild("请先准备游戏资源。"); return; }
+        try
+        {
+            var fresh = package.Library is { } library
+                ? library.OpenScene(_storyOverlay?.SceneId ?? library.Manifest.DefaultScene, overlay: _storyOverlay) : package;
+            ShowScene(fresh);
+        }
+        catch (Exception error)
+        {
+            _menuController.ResumeFromChild("无法开始游戏：" + error.Message);
+            GD.PushError(error.ToString());
+        }
+    }
+
     private async Task ShowFailureAsync(Exception error)
     {
         _status.Text = "加载失败：" + error.Message;
         _status.TooltipText = error.Message;
+        if (!_smoke) _menuController.ReportError("加载失败：" + error.Message);
         GD.PushError(error.ToString());
         if (_smoke) await FinishSmokeAsync(false, error.Message);
     }

@@ -15,7 +15,7 @@ Godot / Game.Tools / Game.Tests ──→ 上述所需项目
 
 src 保持 `Game.Core`、`Game.Content`、`Game.Importing` 三个项目。Battle 与 Event 留在 Core 的职责目录，MOD 使用 Content 的共享文档，不分别建立 csproj。`BattleSession` 将出战、回合、移动和武功分别放入 `Roster` / `Turns` / `Movement` / `Magic` 分部；`EventRunner` 按控制流、呈现、计时、快照及商店/试炼续行分部，合同与接口拆为 `EventContracts.cs` 和 `IEventWorld.cs`。这些都是同一个类型的内聚实现，没有增加会话副本或第二 VM。
 
-Godot 脚本分为 `Scripts/App` 的根入口与装配、`Battle` 的独立战斗组件、`Shops` 的商店、`Audio` 的音乐、`Ending` 的终端结局、`Views` 的视图宿主/绘制/对话，以及 `Diagnostics` 的冒烟驱动。主场景仍为 `Scenes/AppRoot.tscn`，绑定 `Scripts/App/AppRoot.cs` 并保留原脚本 UID。`SceneView` 按资源准备、探索、世界和战斗绘制保留内聚分部；背包、存档等仍是 AppRoot 分部，未声称全部根功能已经组件化。
+Godot 脚本分为 `Scripts/App` 的根入口与装配、`Menus` 的标题/探索菜单和独立行囊、`Battle` 的独立战斗组件、`Shops` 的商店、`Audio` 的音乐、`Ending` 的终端结局、`Views` 的视图宿主/绘制/对话，以及 `Diagnostics` 的冒烟驱动。主场景仍为 `Scenes/AppRoot.tscn`，绑定 `Scripts/App/AppRoot.cs` 并保留原脚本 UID。`SceneView` 保留内聚分部；存档仍是 AppRoot 分部。菜单只在稳定探索开启，由宿主暂停模拟，具体职责见[正式菜单](menus.md)。
 
 `BattleController` 协调视图切换、AI 节奏、呈现与结算，`BattleCommandRouter` 校验有类型的意图与上下文、委托 Core 并管理选格。`BattleActionPanel` 只读模型并发意图，`BattleActionModelFactory` 纯构建模型/状态文案；`BattleResultsPanel` 只读结果模型并发确认，`BattleResultsFormatter` 只格式化冻结数据；`BattleAudioPlayer` 独立管理双播放器与缓存生命周期。Battle 目录没有 AppRoot partial，不通过全局根上下文取得依赖。
 

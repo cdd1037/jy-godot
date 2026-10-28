@@ -16,6 +16,18 @@ public sealed class MusicController : IDisposable
     private double _tick;
     private int _cursor;
     private bool _disposed;
+    private bool _enabled = true;
+
+    public bool Enabled
+    {
+        get => _enabled;
+        set
+        {
+            if (_enabled == value) return;
+            _enabled = value;
+            Stop(); _revision = -1; Error = null;
+        }
+    }
 
     public string? Error { get; private set; }
 
@@ -27,7 +39,7 @@ public sealed class MusicController : IDisposable
 
     public void Advance(double delta)
     {
-        if (_disposed) return;
+        if (_disposed || !Enabled) return;
         if (!double.IsFinite(delta) || delta < 0) throw new ArgumentOutOfRangeException(nameof(delta));
         try
         {

@@ -11,6 +11,8 @@ public partial class AppRoot
     private CheckButton _smoothMovement = null!;
     private FileDialog _folder = null!;
     private VBoxContainer _explorationPanel = null!;
+    private PanelContainer _sidePanel = null!;
+    private Button _menuButton = null!;
 
     private void BuildUi()
     {
@@ -39,7 +41,9 @@ public partial class AppRoot
         title.AddThemeFontSizeOverride("font_size", 30);
         title.AddThemeColorOverride("font_color", new Color("e6d2a4"));
         header.AddChild(title);
-        header.AddChild(new Label { Text = "初入江湖  /  场景与剧情", Modulate = new Color("9caf9d") });
+        _menuButton = new Button { Name = "OpenGameMenu", Text = "菜单（Esc）", FocusMode = FocusModeEnum.None };
+        _menuButton.Pressed += () => _menuController.OpenGameMenu();
+        header.AddChild(_menuButton);
         var body = new HBoxContainer { SizeFlagsVertical = SizeFlags.ExpandFill };
         body.AddThemeConstantOverride("separation", 20);
         page.AddChild(body);
@@ -62,6 +66,8 @@ public partial class AppRoot
             UpdateSceneInfo();
         };
         var sidePanel = new PanelContainer { CustomMinimumSize = new Vector2(280, 0) };
+        _sidePanel = sidePanel;
+        sidePanel.Visible = false;
         sidePanel.AddThemeStyleboxOverride("panel", Box("192720", 12));
         body.AddChild(sidePanel);
         var scroll = new ScrollContainer
@@ -121,7 +127,7 @@ public partial class AppRoot
         collision.Toggled += value => { _world.ShowCollision = value; _world.QueueRedraw(); };
         _explorationPanel.AddChild(collision);
         _smoothMovement = new CheckButton { Text = "平滑移动（F2）", ButtonPressed = true, FocusMode = FocusModeEnum.None };
-        _smoothMovement.Toggled += value => { _world.SmoothMovement = value; _world.QueueRedraw(); };
+        _smoothMovement.Toggled += value => _menuController.SetPreferences(_menuController.Preferences with { SmoothMovement = value });
         _explorationPanel.AddChild(_smoothMovement);
         _explorationPanel.AddChild(new Control { SizeFlagsVertical = SizeFlags.ExpandFill });
         _details = new Label { Text = "原版场景与人物贴图\n格子行走 · 建筑与事件碰撞", AutowrapMode = TextServer.AutowrapMode.WordSmart, Modulate = new Color("94a78f") };
@@ -139,7 +145,9 @@ public partial class AppRoot
         {
             try { if (_openPackage) await OpenPackageAsync(path); else await ImportAsync(path); }
             catch (Exception error) { await ShowFailureAsync(error); }
+            finally { _menuController.ResumeFromChild(); }
         };
+        _folder.Canceled += () => _menuController.ResumeFromChild();
         AddChild(_folder);
         BuildSaveMenu();
     }

@@ -24,7 +24,7 @@ Battle 目录使用独立的 `BattleController`、`BattleCommandRouter`、面板
 
 `ComposeGameplayComponents` 统一装配战斗、商店、音乐和结局。商店面板不判断扣款或自行选择反馈，控制器校验会话和令牌后调用 Core，保持单件确认后收店。音乐的原 XMI、结局的原归档只在 Importing 离线转换；Content 提供规范化 `MidiScore` 和结局资产/校验，Godot 只调度和绘制。Windows WinMM 使用系统 GM 音色，不能称为原 DOS FM 音色还原。结局是不可返回旧剧情的终端演出。
 
-`GameViewHost` 是 `ScenePackage` 与 `SceneView` 绑定的唯一提交入口，加载成功才发布并通知 `SessionChanged`，战斗控制器据此重置。诊断仍可使用准确命名的 `AppRoot.*Smoke` 分部，但通过控制器只读接口及 `ActionExecuted` / `ResultConfirmed` 收集结果，不让正式组件判断 `_smoke`。背包、存档等尚保留为根分部，这次没有完成整个 AppRoot 的组件化。
+`GameViewHost` 是 `ScenePackage` 与 `SceneView` 绑定的唯一提交入口，加载成功才发布并通知 `SessionChanged`。诊断使用准确命名的 `AppRoot.*Smoke` 分部，通过组件只读接口和事件收集结果，不让正式组件判断 `_smoke`。菜单和行囊已有独立控制器与面板；存档仍保留根分部。标题暂存会话不得执行开场，探索菜单暂停宿主时钟而不改变核心存档资格，终端剧情不能被菜单取消。
 
 正式开发入口为 `build.ps1`、`import.ps1 -Source` 和 `run.ps1`。导入生成整个 `content/base/`；`run.ps1 -Scene` 只选择预览起点。剧情样例使用内存叠加，不复制基础库。旧格式兼容代码只保留读取和测试夹具，不作为新增生产导出接口。
 

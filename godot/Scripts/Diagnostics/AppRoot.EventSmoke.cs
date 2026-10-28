@@ -50,17 +50,18 @@ public partial class AppRoot
         }
         if (_eventSmokeStage == 2)
         {
-            if (_inventoryDialog is not { Visible: true } dialog) { _ = FinishSmokeAsync(false, "Inventory did not open."); return; }
+            if (!_inventoryController.IsOpen) { _ = FinishSmokeAsync(false, "Inventory did not open."); return; }
+            var dialog = _inventoryController.Panel;
             if (_capturePath is not null && !_inventoryCaptured && DisplayServer.GetName() != "headless")
             {
                 if (!_capturingInventory) _ = CaptureInventoryAsync();
                 return;
             }
-            var items = dialog.GetNode<ItemList>("InventoryContents/InventoryItems");
-            var use = dialog.GetNode<Button>("InventoryContents/UseItem");
+            var items = dialog.Items;
             var index = Array.FindIndex(session.Inventory.OrderBy(pair => pair.Key).ToArray(), pair => pair.Key == 9000);
             items.Select(index);
             items.EmitSignal(ItemList.SignalName.ItemSelected, (long)index);
+            var use = dialog.UseButton;
             if (use.Disabled) { _ = FinishSmokeAsync(false, "Inventory item could not be selected for use."); return; }
             use.EmitSignal(BaseButton.SignalName.Pressed);
             _eventSmokeInventoryChecks++;

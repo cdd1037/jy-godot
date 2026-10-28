@@ -12,6 +12,9 @@ public partial class AppRoot
     private int _saveSmokeStage, _saveChecks, _saveSilver;
     private SaveGameDocument? _savedCheckpoint;
     private bool _saveMenuCaptured, _capturingSaveMenu;
+    private bool _saveDeliveryQueued;
+    private ulong _saveDeliveryOpenedFrame;
+    private JinYong.Core.Session.GameSession? _saveDeliverySession;
 
     private void PrepareSaveSmokeOverlay()
     {
@@ -29,6 +32,26 @@ public partial class AppRoot
     private void AdvanceSaveSmoke()
     {
         var session = _world.Session!;
+        if (_saveDeliveryQueued)
+        {
+            if (_saveDeliveryOpenedFrame == Engine.GetProcessFrames()) return;
+            try
+            {
+                if (!ReferenceEquals(session, _saveDeliverySession) || !_inventoryController.IsOpen)
+                    throw new InvalidOperationException("Queued inventory delivery lost its session or panel.");
+                var panel = _inventoryController.Panel;
+                var index = Array.FindIndex(session.Inventory.OrderBy(pair => pair.Key).ToArray(), pair => pair.Key == 9000);
+                if (index < 0) throw new InvalidOperationException("Saved quest token is missing.");
+                panel.Items.Select(index);
+                panel.Items.EmitSignal(ItemList.SignalName.ItemSelected, (long)index);
+                var use = panel.UseButton; // Selecting creates a new rendered generation.
+                if (use.Disabled) throw new InvalidOperationException("Saved quest token cannot be used.");
+                use.EmitSignal(BaseButton.SignalName.Pressed);
+                _saveDeliveryQueued = false; _saveDeliverySession = null;
+            }
+            catch (Exception error) { _saveDeliveryQueued = false; _ = FinishSmokeAsync(false, error.Message); }
+            return;
+        }
         if (session.PendingLifecycle is { } lifecycle)
         {
             if (_saveSmokeStage == 7 && _capturePath is not null && !_saveMenuCaptured && DisplayServer.GetName() != "headless")
@@ -173,12 +196,11 @@ public partial class AppRoot
     private void DeliverSaveSmokeToken()
     {
         _bagButton.EmitSignal(BaseButton.SignalName.Pressed);
-        if (_inventoryDialog is not { Visible: true } dialog) throw new InvalidOperationException("Inventory did not open.");
-        var items = dialog.GetNode<ItemList>("InventoryContents/InventoryItems");
-        var use = dialog.GetNode<Button>("InventoryContents/UseItem");
-        var index = Array.FindIndex(_world.Session!.Inventory.OrderBy(pair => pair.Key).ToArray(), pair => pair.Key == 9000);
-        if (index < 0) throw new InvalidOperationException("Saved quest token is missing.");
-        items.Select(index); items.EmitSignal(ItemList.SignalName.ItemSelected, (long)index);
-        use.EmitSignal(BaseButton.SignalName.Pressed);
+        if (!_inventoryController.IsOpen) throw new InvalidOperationException("Inventory did not open.");
+        // Keep the production opening-frame input barrier: dispatch after a real
+        // host process boundary, without adding a bypass to the controller.
+        _saveDeliveryQueued = true;
+        _saveDeliveryOpenedFrame = Engine.GetProcessFrames();
+        _saveDeliverySession = _world.Session;
     }
 }

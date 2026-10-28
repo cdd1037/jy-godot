@@ -32,17 +32,30 @@ public partial class AppRoot
 
     public override void _UnhandledKeyInput(InputEvent input)
     {
-        if (_endingController.HandleKeyInput(input) || _shopController.HandleKeyInput(input) || _battleController.HandleKeyInput(input))
+        if (SaveMenuVisible)
+        {
+            if (input is InputEventKey { Pressed: true, Echo: false, Keycode: Key.Escape } &&
+                !_saveConfirmation.Visible && _modalClosedFrame != Engine.GetProcessFrames()) CloseSaveMenu();
+            GetViewport().SetInputAsHandled();
+            return;
+        }
+        if (_inventoryController.HandleKeyInput(input) || _menuController.HandleKeyInput(input) ||
+            _endingController.HandleKeyInput(input) || _shopController.HandleKeyInput(input) || _battleController.HandleKeyInput(input))
         {
             GetViewport().SetInputAsHandled();
         }
-        else if (input is InputEventKey { Pressed: true, Echo: false, Keycode: Key.F1 })
+        else if (input is InputEventKey { Pressed: true, Echo: false, Keycode: Key.F3 })
+        {
+            _debugVisible = !_debugVisible;
+            GetViewport().SetInputAsHandled();
+        }
+        else if (_debugVisible && input is InputEventKey { Pressed: true, Echo: false, Keycode: Key.F1 })
         {
             _world.ShowCollision = !_world.ShowCollision;
             _world.QueueRedraw();
             GetViewport().SetInputAsHandled();
         }
-        else if (input is InputEventKey { Pressed: true, Echo: false, Keycode: Key.F2 })
+        else if (_debugVisible && input is InputEventKey { Pressed: true, Echo: false, Keycode: Key.F2 })
         {
             _smoothMovement.ButtonPressed = !_smoothMovement.ButtonPressed;
             GetViewport().SetInputAsHandled();
@@ -56,7 +69,7 @@ public partial class AppRoot
             if ((Input.IsActionPressed(ActionName(direction)) || Input.IsActionJustPressed(ActionName(direction))) &&
                 !_heldDirections.Contains(direction)) _heldDirections.Add(direction);
         var typing = GetViewport().GuiGetFocusOwner() is LineEdit;
-        var canWalk = !_finishing && !_busy && !typing && !_folder.Visible && !SaveMenuVisible && !_shopController.IsOpen && !_endingController.IsOpen && !_battleController.ResultsOpen && _inventoryDialog?.Visible != true && _modalClosedFrame != Engine.GetProcessFrames();
+        var canWalk = !_finishing && !_busy && !typing && !_folder.Visible && !SaveMenuVisible && !_shopController.IsOpen && !_endingController.IsOpen && !_battleController.ResultsOpen && !_inventoryController.IsOpen && !_menuController.BlocksSimulation && _modalClosedFrame != Engine.GetProcessFrames();
         if (canWalk)
         {
             if (_world.Session?.IsEventRunning == true)

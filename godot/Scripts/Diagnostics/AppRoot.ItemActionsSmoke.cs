@@ -45,16 +45,17 @@ public partial class AppRoot
             }
             if (_itemActionStage is >= 1 and <= 4)
             {
-                if (_inventoryDialog is not { Visible: true } dialog) throw new InvalidOperationException("Expanded inventory did not open.");
-                var apply = dialog.GetNode<Button>("InventoryContents/ApplyItemToRole");
+                if (!_inventoryController.IsOpen) throw new InvalidOperationException("Expanded inventory did not open.");
+                var dialog = _inventoryController.Panel;
                 if (_itemActionStage == 4)
                 {
                     if (_capturePath is not null && !_inventoryCaptured && DisplayServer.GetName() != "headless")
                     { if (!_capturingInventory) _ = CaptureInventoryAsync(); return; }
-                    dialog.EmitSignal(AcceptDialog.SignalName.Confirmed); _itemActionStage = 5; return;
+                    dialog.ReturnButton.EmitSignal(BaseButton.SignalName.Pressed); _itemActionStage = 5; return;
                 }
                 var id = _itemActionStage == 1 ? _actionMedicine : _itemActionStage == 2 ? _actionEquipment : _actionBook;
                 SelectInventorySmokeItem(dialog, id);
+                var apply = dialog.ApplyButton;
                 if (apply.Disabled) throw new InvalidOperationException("Inventory role action unexpectedly disabled: " + apply.TooltipText);
                 var hp = session.Party!.GetWord(0, RoleWords.Hp);
                 apply.EmitSignal(BaseButton.SignalName.Pressed);
@@ -177,12 +178,12 @@ public partial class AppRoot
         _actionBookCount = session.Inventory[_actionBook]; _actionThrownCount = session.Inventory[_actionThrown];
     }
 
-    private void SelectInventorySmokeItem(AcceptDialog dialog, int id)
+    private void SelectInventorySmokeItem(InventoryPanel dialog, int id)
     {
         var entries = _world.Session!.Inventory.OrderBy(pair => pair.Key).ToArray();
         var index = Array.FindIndex(entries, item => item.Key == id);
         if (index < 0) throw new InvalidOperationException("Inventory fixture item missing.");
-        var items = dialog.GetNode<ItemList>("InventoryContents/InventoryItems");
+        var items = dialog.Items;
         items.Select(index); items.EmitSignal(ItemList.SignalName.ItemSelected, (long)index);
     }
 

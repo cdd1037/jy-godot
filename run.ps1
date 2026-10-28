@@ -9,6 +9,8 @@ param(
     [switch]$Headless,
     [switch]$GridMovement,
     [switch]$PlayOpening,
+    [switch]$DirectPlay,
+    [switch]$DebugTools,
     [switch]$EventDemo,
     [switch]$BattleDemo,
     [switch]$BattleSmoke,
@@ -51,6 +53,8 @@ if ($StoryOverlay) { $arguments += @("--story-overlay", [IO.Path]::GetFullPath($
 if ($Smoke) { $arguments += "--smoke-test" }
 if ($GridMovement) { $arguments += "--grid-movement" }
 if ($PlayOpening) { $arguments += "--play-opening" }
+if ($DirectPlay) { $arguments += "--direct-play" }
+if ($DebugTools) { $arguments += "--debug-tools" }
 if ($EventDemo -and $Smoke) { $arguments += "--event-smoke" }
 if ($TravelSmoke) { $arguments += "--travel-smoke" }
 if ($BattleSmoke) { $arguments += "--battle-smoke" }

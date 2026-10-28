@@ -16,6 +16,8 @@ public partial class AppRoot
             return index >= 0 && index + 1 < args.Length ? args[index + 1] : null;
         }
         _smoke = args.Contains("--smoke-test");
+        _directPlay = _smoke || args.Contains("--direct-play") || args.Contains("--play-opening");
+        _debugVisible = args.Contains("--debug-tools");
         _eventSmoke = args.Contains("--event-smoke");
         _travelSmoke = args.Contains("--travel-smoke");
         _battleSmoke = args.Contains("--battle-smoke");
@@ -23,7 +25,10 @@ public partial class AppRoot
         _saveSmoke = args.Contains("--save-smoke");
         _savesDirectory = Option("--saves-directory") ?? ProjectSettings.GlobalizePath("user://saves");
         _world.PlayOpening = args.Contains("--play-opening");
-        _smoothMovement.ButtonPressed = !args.Contains("--grid-movement");
+        var preferences = _smoke ? new GamePreferences() : GamePreferences.Load();
+        if (args.Contains("--grid-movement")) preferences = preferences with { SmoothMovement = false };
+        _menuController.SetPreferences(preferences, notify: false);
+        ApplyGamePreferences(preferences);
         _smokeStarted = System.Environment.TickCount64;
         _capturePath = Option("--capture");
         _dialogueCapturePath = Option("--capture-dialogue") ?? (_capturePath is null ? null :

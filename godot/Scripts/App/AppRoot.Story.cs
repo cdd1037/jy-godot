@@ -14,7 +14,8 @@ public partial class AppRoot
     private void ConfirmDialogue(long token)
     {
         var frame = Engine.GetProcessFrames();
-        if (_lastConfirmFrame == frame || _modalClosedFrame == frame || _shopController.IsOpen) return;
+        if (_lastConfirmFrame == frame || _modalClosedFrame == frame || _shopController.IsOpen ||
+            _menuController.BlocksSimulation || _inventoryController.IsOpen || SaveMenuVisible) return;
         if (_world.Session?.Events?.Confirm(token) == true)
         {
             _lastConfirmFrame = frame;
@@ -27,7 +28,7 @@ public partial class AppRoot
         if (_world.Session is not { } session) return;
         UpdateSceneInfo();
         _controlsHint.Text = _shopController.IsOpen ? "↑ / ↓ 选择 · Enter 购买一件 · Esc 离开" : _battleController.ResultsOpen ? "Enter / 空格继续剧情" : session.Battle is not null
-            ? "鼠标选择行动与目标 · Esc 取消 · 滚轮缩放" : "WASD 行走 · E / 空格 交互 · Enter 继续 · 滚轮缩放";
+            ? "鼠标选择行动与目标 · Esc 取消 · 滚轮缩放" : "WASD 行走 · E / 空格 交互 · Esc 菜单 · 滚轮缩放";
         _bagButton.Disabled = _busy || !session.CanSave || _world.IsMoving || CurrentPackage?.Story is null;
         UpdateSaveButtons();
         var pending = session.Events?.Pending;
@@ -63,7 +64,8 @@ public partial class AppRoot
     private void RespondToChoice(long token, int option)
     {
         var frame = Engine.GetProcessFrames();
-        if (_lastConfirmFrame == frame || _modalClosedFrame == frame || _shopController.IsOpen || _world.Session?.Events is not { } events) return;
+        if (_lastConfirmFrame == frame || _modalClosedFrame == frame || _shopController.IsOpen || _menuController.BlocksSimulation ||
+            _inventoryController.IsOpen || SaveMenuVisible || _world.Session?.Events is not { } events) return;
         if (option < 0 ? events.CancelChoice(token) : events.Choose(token, option))
         {
             _lastConfirmFrame = frame;

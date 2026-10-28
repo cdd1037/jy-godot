@@ -23,7 +23,7 @@ public partial class AppRoot
 
     private bool CanOpenSaveMenu => !_busy && CurrentPackage?.Library is not null &&
         _world.Session is { CanSave: true } && !_world.IsMoving && !SaveMenuVisible &&
-        _inventoryDialog is null && !_folder.Visible;
+        !_inventoryController.IsOpen && !_folder.Visible;
 
     private void BuildSaveButtons(VBoxContainer side)
     {
@@ -39,7 +39,7 @@ public partial class AppRoot
 
     private void BuildSaveMenu()
     {
-        _savePanel = new Control { Name = "SaveMenu", Visible = false, MouseFilter = MouseFilterEnum.Stop };
+        _savePanel = new Control { Name = "SaveMenu", Visible = false, MouseFilter = MouseFilterEnum.Stop, ZIndex = 140 };
         _savePanel.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
         AddChild(_savePanel);
         var veil = new ColorRect { Color = new Color(0, 0, 0, 0.94f), MouseFilter = MouseFilterEnum.Stop };
@@ -101,6 +101,7 @@ public partial class AppRoot
         _saveHint.Text = death ? "此番闯荡已经结束。载入存档，再赴江湖。" : _saving
             ? "选择一个位置保存当前进度。" : "选择存档继续游戏。";
         _saveCancel.Visible = _shownLifecycle is null;
+        _saveCancel.Text = _menuController.BlocksSimulation ? "返回菜单" : "返回游戏";
         _saveQuit.Visible = _shownLifecycle is not null;
         _saveError.Text = "";
         RefreshSaveSlots();
@@ -185,6 +186,7 @@ public partial class AppRoot
             old?.RetireForReplacement();
             _audio.Stop(); _dialogue.Present(null);
             _shownLifecycle = null; CloseSaveMenu();
+            _menuController.NotifyGameStarted();
             _sceneNumber.Value = restored.Session.World.CurrentSceneId;
             BindStory(); _world.QueueRedraw();
             return true;
@@ -204,5 +206,6 @@ public partial class AppRoot
         _savePanel.Hide(); _heldDirections.Clear();
         GetViewport().GuiGetFocusOwner()?.ReleaseFocus();
         _modalClosedFrame = Engine.GetProcessFrames();
+        _menuController.ResumeFromChild();
     }
 }
